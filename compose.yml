@@ -1,0 +1,47 @@
+# version: "3.7"
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: hyperleagal:latest
+    container_name: hyperleagal
+    restart: unless-stopped
+    command:
+      - /bin/sh
+      - -c 
+      - |
+        npx prisma generate
+        npm run start:dev
+    ports:
+      - "3001:3000"
+      # - "5010:5000"
+    volumes:
+      - .:/usr/src/app:rw
+    environment:
+      - NODE_ENV=development
+    networks:
+      - wanzy
+  db:
+    image: mysql:8
+    container_name: hyperlegal-db
+    restart: unless-stopped
+    ports:
+      - "3306:3306"
+    volumes:
+      - dbdata:/var/lib/mysql
+    environment:
+      MYSQL_DATABASE: hyperlegal
+      MYSQL_ROOT_PASSWORD: hyperlegal
+      MYSQL_PASSWORD: hyperlegal
+      MYSQL_USER: hyperlegal
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    networks:
+      - wanzy
+networks:
+  wanzy:
+    name: wanzy
+    external: true
+volumes:
+  dbdata:
