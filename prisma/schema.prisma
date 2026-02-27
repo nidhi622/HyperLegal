@@ -41,3 +41,40 @@ model PlatformUsers {
 
   @@map("platform_users")
 }
+
+
+// 1. FIRMS (The Organizations/Law-Firms)
+model Organisations {
+  id              String      @id @default(uuid()) 
+  name            String      @db.VarChar(255)
+  email           String      @unique @db.VarChar(255)
+  domain          String?     @db.VarChar(255)
+  redFlagPolicies Json?       @map("red_flag_policies")
+  status          Boolean     @default(true)
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  // Relation to users belonging to this firm
+  firmUsers       OrganisationUsers[]
+
+  @@map("organisations")
+}
+
+// 2. FIRM_USERS (The Staff members of a Firm)
+model OrganisationUsers {
+  id         String   @id @default(uuid()) 
+  organisationId     String   @map("firm_id") 
+  firstName  String   @map("first_name")
+  lastName   String   @map("last_name")
+  email      String   @unique @db.VarChar(255)
+  role       UserRole @default(standard)
+  cognitoSub String?  @map("cognito_sub")
+  status     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  // Relation back to the Firm
+  organisation       Organisations    @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@map("organisation_users")
+}

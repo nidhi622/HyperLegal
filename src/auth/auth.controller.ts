@@ -24,7 +24,7 @@ export class AuthController {
   @ApiResponse({ status: 200, description: 'Successfully logged in' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
  async login(@Body() request: LoginDto) {
-    return this.authService.login(request.email, request.password);
+    return this.authService.login(request.email, request.password,request.role);
   }
 
   @Post('forgot-password')

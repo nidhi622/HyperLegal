@@ -22,7 +22,10 @@ export class AuthService {
   private client: CognitoIdentityProviderClient;
   // private prisma:PrismaService
 
-  constructor(private config: ConfigService,private prisma: PrismaService) {
+  constructor(
+    private config: ConfigService,
+    private prisma: PrismaService,
+  ) {
     this.client = new CognitoIdentityProviderClient();
     //   {
     //   region: this.config.get('AWS_REGION'),
@@ -55,6 +58,15 @@ export class AuthService {
     const normalizedEmail = dto.email.toLowerCase();
 
     try {
+      const existingUser = await this.prisma.platformUsers.findUnique({
+        where: { email: normalizedEmail },
+      });
+
+      if (existingUser) {
+        response.statusCode = HttpStatus.CONFLICT;
+        response.message = 'This email is already registered.';
+        return response;
+      }
       // 1. Cognito SignUp
       // const cognitoCommand = new SignUpCommand({
       //   ClientId: this.config.get('COGNITO_CLIENT_ID')!,
@@ -70,7 +82,6 @@ export class AuthService {
 
       // const cognitoRes = await this.client.send(cognitoCommand);
 
-
       // 2. Prisma MySQL Entry
       const newUser = await this.prisma.platformUsers.create({
         data: {
@@ -82,14 +93,12 @@ export class AuthService {
         },
       });
 
-
       // 3. Format Standardized Response
       response.data = newUser;
       return response;
-
-    } catch (error:any) {
+    } catch (error: any) {
       // 4. Handle Standardized Error
-      console.log("err:",error)
+      console.log('err:', error);
       response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
       response.message = 'Registration failed';
       response.error = error.message;
@@ -98,7 +107,8 @@ export class AuthService {
   }
 
   //login fucntion
-  async login(email: string, pass: string) {
+  async login(email: string, pass: string,role:string) {
+    
     const command = new InitiateAuthCommand({
       AuthFlow: 'USER_PASSWORD_AUTH',
       //   UserPoolId: this.config.get('COGNITO_USER_POOL_ID')!,
@@ -113,7 +123,7 @@ export class AuthService {
     });
 
     try {
-      console.log('command: ', command);
+      console.log('command::: ', command);
       const response = await this.client.send(command);
 
       console.log('response: ', response);
@@ -124,6 +134,8 @@ export class AuthService {
       return {
         accessToken: response.AuthenticationResult?.AccessToken,
         refreshToken: response.AuthenticationResult?.RefreshToken,
+        ExpiresIn:response.AuthenticationResult?.ExpiresIn,
+        TokenType: response.AuthenticationResult?.TokenType,
       };
       // return response.AuthenticationResult;
     } catch (error) {

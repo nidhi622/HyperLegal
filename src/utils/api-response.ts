@@ -8,6 +8,15 @@
 //     data: object = [];
 // }
 
+
+
+// {
+//     // status:string  = "success" | "failed";
+//     success :boolean (ture|false)
+//     message: string;
+//     error: any = null;   {message,data,code}
+//     data: object = [];
+// }
 import { HttpStatus } from '@nestjs/common';
 import { ApiProperty } from '@nestjs/swagger';
 
