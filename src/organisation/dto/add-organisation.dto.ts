@@ -1,8 +1,15 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, IsOptional, IsUUID, IsEnum } from 'class-validator';
-import { UserRole } from 'generated/prisma/client';
+import { UserRole } from 'generated/prisma/enums';
+import {
+  IsBoolean,
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
-export class CreateOrganisationData {
+export class CreateOrganisationDto {
   @ApiProperty({ example: 'Pearson Hardman' })
   @IsString()
   @IsNotEmpty()
@@ -16,15 +23,20 @@ export class CreateOrganisationData {
   @IsString()
   @IsOptional()
   domain?: string;
+
+  @ApiProperty({ required: false, example: { policy: 'default' } })
+  @IsOptional()
+  redFlagPolicies?: Record<string, unknown>;
+
+  @ApiProperty({ required: false, example: true })
+  @IsOptional()
+  @IsBoolean()
+  status?: boolean;
 }
 
-export class UpdateOrganizationData extends PartialType(CreateOrganisationData) {}
+export class UpdateOrganisationDto extends PartialType(CreateOrganisationDto) {}
 
-export class AddOrganizationUserData {
-  @ApiProperty({ example: 'uuid-of-organization' })
-  @IsUUID()
-  organizationId: string;
-
+export class CreateOrganisationUserDto {
   @ApiProperty({ example: 'Harvey' })
   @IsString()
   @IsNotEmpty()
@@ -32,14 +44,26 @@ export class AddOrganizationUserData {
 
   @ApiProperty({ example: 'Specter' })
   @IsString()
-  @IsNotEmpty()
-  lastName: string;
+  @IsOptional()
+  lastName?: string;
 
-  @ApiProperty({ example: 'harvey@specterlit.com' })
+  @ApiProperty({ example: 'harvey@specterlitt.com' })
   @IsEmail()
   email: string;
 
   @ApiProperty({ enum: UserRole, example: UserRole.standard })
   @IsEnum(UserRole)
   role: UserRole;
+
+  @ApiProperty({ required: false, example: true })
+  @IsOptional()
+  @IsBoolean()
+  status?: boolean;
+
+  @ApiProperty({ required: false, example: true })
+  @IsOptional()
+  @IsBoolean()
+  sendInvite?: boolean;
 }
+
+export class UpdateOrganisationUserDto extends PartialType(CreateOrganisationUserDto) {}

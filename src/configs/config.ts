@@ -8,7 +8,7 @@ export const config = {
         environment: env('APP_ENV', 'development'),
     },
     db: {
-        url: env('DATABASE_URL', 'mongodb://localhost:27017/hotel-management'),
+        url: env('DATABASE_URL', 'postgresql://hyperlegal:hyperlegal@db:5432/mydb?schema=hyperlegal'),
     },
     vendors: {
         default: axisDataConfig,

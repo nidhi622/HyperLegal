@@ -1,17 +1,24 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, IsEnum, IsBoolean, IsOptional } from 'class-validator';
-import { UserRole } from 'generated/prisma/client';
+import { UserRole } from 'generated/prisma/enums';
+import {
+  IsBoolean,
+  IsEmail,
+  IsEnum,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
-export class CreatePlatformUserRequest {
+export class CreatePlatformUserDto {
   @ApiProperty({ example: 'Mike' })
   @IsString()
   @IsNotEmpty()
   firstName: string;
 
-  @ApiProperty({ example: 'Ross' })
+  @ApiProperty({ example: 'Ross', required: false })
   @IsString()
-  @IsNotEmpty()
-  lastName: string;
+  @IsOptional()
+  lastName?: string;
 
   @ApiProperty({ example: 'mike.ross@hyperlegal.com' })
   @IsEmail()
@@ -20,22 +27,16 @@ export class CreatePlatformUserRequest {
   @ApiProperty({ enum: UserRole, example: UserRole.admin })
   @IsEnum(UserRole)
   role: UserRole;
-}
 
-export class UpdatePlatformUserRequest extends PartialType(CreatePlatformUserRequest) {
-  @ApiProperty({ example: true, required: false })
-  @IsBoolean()
+  @ApiProperty({ required: false, example: true })
   @IsOptional()
+  @IsBoolean()
   status?: boolean;
+
+  @ApiProperty({ required: false, example: true })
+  @IsOptional()
+  @IsBoolean()
+  sendInvite?: boolean;
 }
 
-export class ConfirmUserRequest {
-  @ApiProperty({ example: 'mike.ross@hyperlegal.com' })
-  @IsEmail()
-  email: string;
-
-  @ApiProperty({ example: '123456' })
-  @IsString()
-  @IsNotEmpty()
-  code: string;
-}
+export class UpdatePlatformUserDto extends PartialType(CreatePlatformUserDto) {}

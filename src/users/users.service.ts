@@ -1,93 +1,113 @@
-// import { Injectable } from '@nestjs/common';
-// import { ConfigService } from '@nestjs/config';
-// import { PrismaService } from 'src/database/prisma.service';
-// import { ApiResponse } from 'src/utils/api-response';
+import { Injectable } from '@nestjs/common';
+import { API_ERROR_CODES } from 'src/common/constants/error-codes';
+import { CognitoService } from 'src/cognito/cognito.service';
+import { PrismaService } from 'src/database/prisma.service';
+import {
+  ApiResponse,
+  errorResponse,
+  successResponse,
+} from 'src/utils/api-response';
+import { CreatePlatformUserDto, UpdatePlatformUserDto } from './dto/user.dto';
 
-// @Injectable()
-// export class UsersService {
+@Injectable()
+export class UsersService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cognitoService: CognitoService,
+  ) {}
 
-//     constructor(
-//     private prisma: PrismaService,
-//     private config: ConfigService,
-//     // Assuming you've injected the Cognito client or Auth Service
-//   ){
+  async create(payload: CreatePlatformUserDto): Promise<ApiResponse> {
+    const email = payload.email.toLowerCase();
 
-//   }
-//   async create(payload: CreatePlatformUserRequest): Promise<ApiResponse> {
-//     const response = new ApiResponse('Platform user created successfully');
-//     const normalizedEmail = payload.email.toLowerCase();
+    const existingUser = await this.prisma.platformUsers.findUnique({
+      where: { email },
+    });
 
-//     // Check-First Policy
-//     const existing = await this.prisma.platformUsers.findUnique({
-//       where: { email: normalizedEmail },
-//     });
-//     if (existing) {
-//       response.statusCode = 409;
-//       response.message = 'A platform user with this email already exists';
-//       return response;
-//     }
+    if (existingUser) {
+      return errorResponse(API_ERROR_CODES.CONFLICT, 'Platform user email already exists.');
+    }
 
-//     try {
-//       // Create in Cognito (using SignUpCommand logic)
-//       // Note: In a real flow, you'd call your AuthService.addUser here
+    const cognitoResult = await this.cognitoService.createUser({
+      email,
+      firstName: payload.firstName,
+      lastName: payload.lastName,
+      role: payload.role,
+      sendInvite: payload.sendInvite,
+    });
 
-//       const newUser = await this.prisma.platformUsers.create({
-//         data: {
-//           firstName: payload.firstName,
-//           lastName: payload.lastName,
-//           email: normalizedEmail,
-//           role: payload.role,
-//           status: true,
-//           // cognitoSub: fromCognitoResponse.UserSub
-//         },
-//       });
+    const user = await this.prisma.platformUsers.create({
+      data: {
+        firstName: payload.firstName,
+        lastName: payload.lastName,
+        email,
+        role: payload.role,
+        status: payload.status ?? true,
+        cognitoSub: cognitoResult.userSub,
+      },
+    });
 
-//       response.data = newUser;
-//       return response;
-//     } catch (error) {
-//       response.statusCode = 500;
-//       response.message = 'Failed to onboard platform user';
-//       response.error = error.message;
-//       return response;
-//     }
-//   }
+    return successResponse('Platform user created successfully.', user);
+  }
 
-//   // 2. READ (Get All)
-//   async findAll(): Promise<ApiResponse> {
-//     const users = await this.prisma.platformUsers.findMany({
-//       orderBy: { createdAt: 'desc' },
-//     });
-//     return new ApiResponse('Platform users retrieved', users);
-//   }
+  async findAll(): Promise<ApiResponse> {
+    const users = await this.prisma.platformUsers.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
 
-//   // 3. READ (Get by ID)
-//   async findOne(id: string): Promise<ApiResponse> {
-//     const user = await this.prisma.platformUsers.findUnique({ where: { id } });
-//     if (!user) {
-//       return new ApiResponse('User not found', null, 404);
-//     }
-//     return new ApiResponse('User details retrieved', user);
-//   }
+    return successResponse('Platform users retrieved successfully.', users);
+  }
 
-//   // 4. UPDATE
-//   async update(
-//     id: string,
-//     payload: UpdatePlatformUserRequest,
-//   ): Promise<ApiResponse> {
-//     try {
-//       const updatedUser = await this.prisma.platformUsers.update({
-//         where: { id },
-//         data: payload,
-//       });
-//       return new ApiResponse('User updated successfully', updatedUser);
-//     } catch (error) {
-//       return new ApiResponse('Update failed', null, 404);
-//     }
-//   }
+  async findOne(id: string): Promise<ApiResponse> {
+    const user = await this.prisma.platformUsers.findUnique({ where: { id } });
 
-//   // 5. DELETE
-//   async remove(id: string): Promise<ApiResponse> {
-//     await this.prisma.platformUsers.delete({ where: { id } });
-//     return new ApiResponse('User deleted successfully from platform');
-//   }
-// }
+    if (!user) {
+      return errorResponse(API_ERROR_CODES.NOT_FOUND, 'Platform user not found.');
+    }
+
+    return successResponse('Platform user retrieved successfully.', user);
+  }
+
+  async update(id: string, payload: UpdatePlatformUserDto): Promise<ApiResponse> {
+    const user = await this.prisma.platformUsers.findUnique({ where: { id } });
+
+    if (!user) {
+      return errorResponse(API_ERROR_CODES.NOT_FOUND, 'Platform user not found.');
+    }
+
+    if (payload.email) {
+      const email = payload.email.toLowerCase();
+      const existingUser = await this.prisma.platformUsers.findUnique({ where: { email } });
+
+      if (existingUser && existingUser.id !== id) {
+        return errorResponse(API_ERROR_CODES.CONFLICT, 'Platform user email already exists.');
+      }
+
+      payload.email = email;
+    }
+
+    const updatedUser = await this.prisma.platformUsers.update({
+      where: { id },
+      data: payload,
+    });
+
+    return successResponse('Platform user updated successfully.', updatedUser);
+  }
+
+  async remove(id: string): Promise<ApiResponse> {
+    const user = await this.prisma.platformUsers.findUnique({ where: { id } });
+
+    if (!user) {
+      return errorResponse(API_ERROR_CODES.NOT_FOUND, 'Platform user not found.');
+    }
+
+    await this.prisma.platformUsers.delete({ where: { id } });
+
+    try {
+      await this.cognitoService.deleteUser(user.email);
+    } catch {
+      // Keep DB as source-of-truth in case Cognito account is absent.
+    }
+
+    return successResponse('Platform user deleted successfully.', {});
+  }
+}

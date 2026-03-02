@@ -1,41 +1,47 @@
-// import {HttpStatus} from "@nestjs/common";
+import { ApiErrorCode } from 'src/common/constants/error-codes';
 
-// export class ApiResponse
-// {
-//     statusCode: number = HttpStatus.OK;
-//     message: string;
-//     error: any = null;
-//     data: object = [];
-// }
+export type ErrorDetail = Record<string, any>;
 
-
-
-// {
-//     // status:string  = "success" | "failed";
-//     success :boolean (ture|false)
-//     message: string;
-//     error: any = null;   {message,data,code}
-//     data: object = [];
-// }
-import { HttpStatus } from '@nestjs/common';
-import { ApiProperty } from '@nestjs/swagger';
-
-export class ApiResponse<T = any> {
-  @ApiProperty({ example: 200 })
-  statusCode: number = HttpStatus.OK;
-
-  @ApiProperty({ example: 'Success' })
+export type ApiSuccessResponse<T = any> = {
+  success: true;
   message: string;
+  data: T;
+  // make structure, make meta :T
+  meta: Record<string, any>;
+  
+};
 
-  @ApiProperty({ example: null, nullable: true })
-  error: any = null;
+export type ApiErrorResponse = {
+  success: false;
+  error: {
+    code: ApiErrorCode;
+    message: string;
+    details: ErrorDetail[];
+  };
+};
 
-  @ApiProperty()
-  data: T | T[] = [] as any;
+export type ApiResponse<T = any> = ApiSuccessResponse<T> | ApiErrorResponse;
 
-  constructor(message: string, data?: T, statusCode: number = HttpStatus.OK) {
-    this.message = message;
-    this.data = data ?? ([] as any);
-    this.statusCode = statusCode;
-  }
-}
+export const successResponse = <T = any>(
+  message: string,
+  data: T,
+  meta: Record<string, any> = {},
+): ApiSuccessResponse<T> => ({
+  success: true,
+  message,
+  data,
+  meta,
+});
+
+export const errorResponse = (
+  code: ApiErrorCode,
+  message: string,
+  details: ErrorDetail[] = [],
+): ApiErrorResponse => ({
+  success: false,
+  error: {
+    code,
+    message,
+    details,
+  },
+});

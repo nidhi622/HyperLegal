@@ -22,21 +22,37 @@ services:
       - NODE_ENV=development
     networks:
       - wanzy
+  # db:
+  #   image: mysql:8
+  #   container_name: hyperlegal-db
+  #   restart: unless-stopped
+  #   ports:
+  #     - "3306:3306"
+  #   volumes:
+  #     - dbdata:/var/lib/mysql
+  #   environment:
+  #     MYSQL_DATABASE: hyperlegal
+  #     MYSQL_ROOT_PASSWORD: hyperlegal
+  #     MYSQL_PASSWORD: hyperlegal
+  #     MYSQL_USER: hyperlegal
+  #     SERVICE_TAGS: dev
+  #     SERVICE_NAME: mysql
+  #   networks:
+  #     - wanzy
+
   db:
-    image: mysql:8
-    container_name: hyperlegal-db
-    restart: unless-stopped
-    ports:
-      - "3306:3306"
-    volumes:
-      - dbdata:/var/lib/mysql
+    image: postgres:18
+    container_name: postgres_db
+    restart: unless-stopped 
     environment:
-      MYSQL_DATABASE: hyperlegal
-      MYSQL_ROOT_PASSWORD: hyperlegal
-      MYSQL_PASSWORD: hyperlegal
-      MYSQL_USER: hyperlegal
-      SERVICE_TAGS: dev
-      SERVICE_NAME: mysql
+      POSTGRES_USER: hyperlegal 
+      POSTGRES_PASSWORD: hyperlegal 
+      POSTGRES_DB: hyperlegal 
+      PGDATA: /var/lib/postgresql/18/docker
+    ports:
+      - "5432:5432" 
+    volumes:
+      - postgres_dbdata:/var/lib/postgresql/18/docker
     networks:
       - wanzy
 networks:
@@ -44,4 +60,4 @@ networks:
     name: wanzy
     external: true
 volumes:
-  dbdata:
+  postgres_dbdata:

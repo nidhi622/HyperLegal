@@ -1,4 +1,5 @@
-import { HttpStatus, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { API_ERROR_CODES } from 'src/common/constants/error-codes';
 import {
   CognitoIdentityProviderClient,
   // AdminInitiateAuthCommand,
@@ -14,7 +15,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { createHmac } from 'crypto';
 import { PrismaService } from 'src/database/prisma.service';
-import { ApiResponse } from 'src/utils/api-response';
+import { ApiResponse, errorResponse, successResponse } from 'src/utils/api-response';
 import { AddUserDto } from './dto/add-user.dto';
 
 @Injectable()
@@ -54,7 +55,6 @@ export class AuthService {
   // }
 
   async addUser(dto: AddUserDto): Promise<ApiResponse> {
-    const response = new ApiResponse('User registered successfully');
     const normalizedEmail = dto.email.toLowerCase();
 
     try {
@@ -63,9 +63,7 @@ export class AuthService {
       });
 
       if (existingUser) {
-        response.statusCode = HttpStatus.CONFLICT;
-        response.message = 'This email is already registered.';
-        return response;
+        return errorResponse(API_ERROR_CODES.CONFLICT, 'This email is already registered.');
       }
       // 1. Cognito SignUp
       // const cognitoCommand = new SignUpCommand({
@@ -94,15 +92,13 @@ export class AuthService {
       });
 
       // 3. Format Standardized Response
-      response.data = newUser;
-      return response;
+      return successResponse('User registered successfully.', newUser);
     } catch (error: any) {
       // 4. Handle Standardized Error
       console.log('err:', error);
-      response.statusCode = HttpStatus.INTERNAL_SERVER_ERROR;
-      response.message = 'Registration failed';
-      response.error = error.message;
-      return response;
+      return errorResponse(API_ERROR_CODES.INTERNAL, 'Registration failed.', [
+        { message: error?.message ?? 'Unknown error' },
+      ]);
     }
   }
 
