@@ -13,7 +13,7 @@ import {
   // AdminUpdateUserAttributesCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { ConfigService } from '@nestjs/config';
-import { createHmac } from 'crypto';
+import { createHmac, randomUUID } from 'crypto';
 import { PrismaService } from 'src/database/prisma.service';
 import { ApiResponse, errorResponse, successResponse } from 'src/utils/api-response';
 import { AddUserDto } from './dto/add-user.dto';
@@ -58,11 +58,11 @@ export class AuthService {
     const normalizedEmail = dto.email.toLowerCase();
 
     try {
-      const existingUser = await this.prisma.platformUsers.findUnique({
-        where: { email: normalizedEmail },
-      });
+      const existingUser = await this.prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM users WHERE email = ${normalizedEmail} LIMIT 1
+      `;
 
-      if (existingUser) {
+      if (existingUser.length > 0) {
         return errorResponse(API_ERROR_CODES.CONFLICT, 'This email is already registered.');
       }
       // 1. Cognito SignUp
@@ -80,19 +80,42 @@ export class AuthService {
 
       // const cognitoRes = await this.client.send(cognitoCommand);
 
-      // 2. Prisma MySQL Entry
-      const newUser = await this.prisma.platformUsers.create({
-        data: {
-          firstName: dto.firstName,
-          lastName: dto.lastName,
-          email: normalizedEmail,
-          role: dto.role,
-          // cognitoSub: cognitoRes.UserSub ,
-        },
-      });
+      const appUserId = randomUUID();
+      const platformUserId = randomUUID();
+
+      await this.prisma.$transaction([
+        this.prisma.$executeRaw`
+          INSERT INTO users (id, first_name, last_name, email, created_at, updated_at)
+          VALUES (${appUserId}, ${dto.firstName}, ${dto.lastName ?? null}, ${normalizedEmail}, NOW(), NOW())
+        `,
+        this.prisma.$executeRaw`
+          INSERT INTO platform_users (id, user_id, status, created_at, updated_at)
+          VALUES (${platformUserId}, ${appUserId}, true, NOW(), NOW())
+        `,
+      ]);
+
+      await this.assignRoleToPlatformUser(platformUserId, dto.role);
+      const newUser = await this.prisma.$queryRaw<{
+        id: string;
+        userId: string;
+        firstName: string;
+        lastName: string | null;
+        email: string;
+      }[]>`
+        SELECT
+          pu.id AS "id",
+          pu.user_id AS "userId",
+          u.first_name AS "firstName",
+          u.last_name AS "lastName",
+          u.email AS "email"
+        FROM platform_users pu
+        JOIN users u ON u.id = pu.user_id
+        WHERE pu.id = ${platformUserId}
+        LIMIT 1
+      `;
 
       // 3. Format Standardized Response
-      return successResponse('User registered successfully.', newUser);
+      return successResponse('User registered successfully.', newUser[0] ?? null);
     } catch (error: any) {
       // 4. Handle Standardized Error
       console.log('err:', error);
@@ -103,11 +126,11 @@ export class AuthService {
   }
 
   //login fucntion
-  async login(email: string, pass: string,role:string) {
+  async login(email: string, pass: string) {
     
     const command = new InitiateAuthCommand({
       AuthFlow: 'USER_PASSWORD_AUTH',
-      //   UserPoolId: this.config.get('COGNITO_USER_POOL_ID')!,
+        // UserPoolId: this.config.get('COGNITO_USER_POOL_ID')!,
       ClientId: this.config.get('COGNITO_CLIENT_ID')!,
       AuthParameters: {
         USERNAME: email,
@@ -127,11 +150,33 @@ export class AuthService {
         'response.AuthenticationResult: ',
         response.AuthenticationResult,
       );
+      // const actorRows = await this.prisma.$queryRaw<{ platformUserId: string }[]>`
+      //   SELECT pu.id AS "platformUserId"
+      //   FROM platform_users pu
+      //   JOIN users u ON u.id = pu.user_id
+      //   WHERE u.email = ${email.toLowerCase()} AND pu.status = true
+      //   LIMIT 1
+      // `;
+      // const platformUserId = actorRows[0]?.platformUserId;
+      // const permissionRows = platformUserId
+      //   ? await this.prisma.$queryRaw<{ name: string }[]>`
+      //       SELECT DISTINCT p.name
+      //       FROM platform_user_roles pur
+      //       JOIN platform_role_permissions prp
+      //         ON prp.platform_role_id = pur.platform_role_id
+      //       JOIN platform_permissions p
+      //         ON p.id = prp.platform_permission_id
+      //       WHERE pur.user_id = ${platformUserId}
+      //     `
+      //   : [];
+      // const permissions = permissionRows.map((row) => row.name);
+
       return {
         accessToken: response.AuthenticationResult?.AccessToken,
         refreshToken: response.AuthenticationResult?.RefreshToken,
         ExpiresIn:response.AuthenticationResult?.ExpiresIn,
         TokenType: response.AuthenticationResult?.TokenType,
+        // permissions,
       };
       // return response.AuthenticationResult;
     } catch (error) {
@@ -247,5 +292,31 @@ export class AuthService {
     return createHmac('sha256', clientSecret)
       .update(username + clientId)
       .digest('base64');
+  }
+
+  private async assignRoleToPlatformUser(
+    platformUserId: string,
+    roleName: string,
+  ): Promise<void> {
+    const roles = await this.prisma.$queryRaw<{ id: string }[]>`
+      SELECT id
+      FROM platform_roles
+      WHERE name = ${roleName}
+      LIMIT 1
+    `;
+    const roleId = roles[0]?.id;
+    if (!roleId) {
+      return;
+    }
+
+    await this.prisma.$executeRaw`
+      DELETE FROM platform_user_roles
+      WHERE user_id = ${platformUserId}
+    `;
+
+    await this.prisma.$executeRaw`
+      INSERT INTO platform_user_roles (id, user_id, platform_role_id, created_at, updated_at)
+      VALUES (${randomUUID()}, ${platformUserId}, ${roleId}, NOW(), NOW())
+    `;
   }
 }

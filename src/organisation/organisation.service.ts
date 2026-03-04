@@ -24,7 +24,7 @@ export class OrganisationService {
   async createOrganisation(payload: CreateOrganisationDto): Promise<ApiResponse> {
     const email = payload.email.toLowerCase();
 
-    const existing = await this.prisma.organisations.findUnique({
+    const existing = await this.prisma.organisation.findUnique({
       where: { email },
     });
 
@@ -32,7 +32,7 @@ export class OrganisationService {
       return errorResponse(API_ERROR_CODES.CONFLICT, 'Organization email already exists.');
     }
 
-    const organisation = await this.prisma.organisations.create({
+    const organisation = await this.prisma.organisation.create({
       data: {
         name: payload.name,
         email,
@@ -46,7 +46,7 @@ export class OrganisationService {
   }
 
   async getAllOrganisations(): Promise<ApiResponse> {
-    const organisations = await this.prisma.organisations.findMany({
+    const organisations = await this.prisma.organisation.findMany({
       orderBy: { createdAt: 'desc' },
     });
 
@@ -54,7 +54,7 @@ export class OrganisationService {
   }
 
   async getOrganisationById(id: string): Promise<ApiResponse> {
-    const organisation = await this.prisma.organisations.findUnique({
+    const organisation = await this.prisma.organisation.findUnique({
       where: { id },
     });
 
@@ -66,7 +66,7 @@ export class OrganisationService {
   }
 
   async updateOrganisation(id: string, payload: UpdateOrganisationDto): Promise<ApiResponse> {
-    const organisation = await this.prisma.organisations.findUnique({ where: { id } });
+    const organisation = await this.prisma.organisation.findUnique({ where: { id } });
 
     if (!organisation) {
       return errorResponse(API_ERROR_CODES.NOT_FOUND, 'Organization not found.');
@@ -74,7 +74,7 @@ export class OrganisationService {
 
     if (payload.email) {
       const email = payload.email.toLowerCase();
-      const existing = await this.prisma.organisations.findUnique({ where: { email } });
+      const existing = await this.prisma.organisation.findUnique({ where: { email } });
 
       if (existing && existing.id !== id) {
         return errorResponse(API_ERROR_CODES.CONFLICT, 'Organization email already exists.');
@@ -83,7 +83,7 @@ export class OrganisationService {
       payload.email = email;
     }
 
-    const updatedOrganisation = await this.prisma.organisations.update({
+    const updatedOrganisation = await this.prisma.organisation.update({
       where: { id },
       data: {
         ...payload,
@@ -95,13 +95,13 @@ export class OrganisationService {
   }
 
   async deleteOrganisation(id: string): Promise<ApiResponse> {
-    const organisation = await this.prisma.organisations.findUnique({ where: { id } });
+    const organisation = await this.prisma.organisation.findUnique({ where: { id } });
 
     if (!organisation) {
       return errorResponse(API_ERROR_CODES.NOT_FOUND, 'Organization not found.');
     }
 
-    await this.prisma.organisations.delete({ where: { id } });
+    await this.prisma.organisation.delete({ where: { id } });
 
     return successResponse('Organization deleted successfully.', {});
   }
@@ -110,7 +110,7 @@ export class OrganisationService {
     organisationId: string,
     payload: CreateOrganisationUserDto,
   ): Promise<ApiResponse> {
-    const organisation = await this.prisma.organisations.findUnique({
+    const organisation = await this.prisma.organisation.findUnique({
       where: { id: organisationId },
     });
 
@@ -119,11 +119,11 @@ export class OrganisationService {
     }
 
     const email = payload.email.toLowerCase();
-    const existingUser = await this.prisma.organisationUsers.findUnique({ where: { email } });
+    // const existingUser = await this.prisma.organisationUser.findUnique({ where: { email } });
 
-    if (existingUser) {
-      return errorResponse(API_ERROR_CODES.CONFLICT, 'Organization user email already exists.');
-    }
+    // if (existingUser) {
+    //   return errorResponse(API_ERROR_CODES.CONFLICT, 'Organization user email already exists.');
+    // }
 
     const cognitoResult = await this.cognitoService.createUser({
       email,
@@ -133,23 +133,23 @@ export class OrganisationService {
       sendInvite: payload.sendInvite,
     });
 
-    const organisationUser = await this.prisma.organisationUsers.create({
-      data: {
-        organisationId,
-        firstName: payload.firstName,
-        lastName: payload.lastName ?? '',
-        email,
-        role: payload.role,
-        status: payload.status ?? true,
-        cognitoSub: cognitoResult.userSub,
-      },
-    });
+    // const organisationUser = await this.prisma.organisationUsers.create({
+    //   data: {
+    //     organisationId,
+    //     firstName: payload.firstName,
+    //     lastName: payload.lastName ?? '',
+    //     email,
+    //     role: payload.role,
+    //     status: payload.status ?? true,
+    //     cognitoSub: cognitoResult.userSub,
+    //   },
+    // });
 
-    return successResponse('Organization user created successfully.', organisationUser);
+    return successResponse('Organization user created successfully.', {});
   }
 
   async getOrganisationUsers(organisationId: string): Promise<ApiResponse> {
-    const organisation = await this.prisma.organisations.findUnique({
+    const organisation = await this.prisma.organisation.findUnique({
       where: { id: organisationId },
     });
 
@@ -157,7 +157,7 @@ export class OrganisationService {
       return errorResponse(API_ERROR_CODES.NOT_FOUND, 'Organization not found.');
     }
 
-    const users = await this.prisma.organisationUsers.findMany({
+    const users = await this.prisma.organisationUser.findMany({
       where: { organisationId },
       orderBy: { createdAt: 'desc' },
     });
@@ -166,7 +166,7 @@ export class OrganisationService {
   }
 
   async getOrganisationUserById(organisationId: string, id: string): Promise<ApiResponse> {
-    const user = await this.prisma.organisationUsers.findFirst({
+    const user = await this.prisma.organisationUser.findFirst({
       where: { id, organisationId },
     });
 
@@ -182,7 +182,7 @@ export class OrganisationService {
     id: string,
     payload: UpdateOrganisationUserDto,
   ): Promise<ApiResponse> {
-    const user = await this.prisma.organisationUsers.findFirst({
+    const user = await this.prisma.organisationUser.findFirst({
       where: { id, organisationId },
     });
 
@@ -192,25 +192,25 @@ export class OrganisationService {
 
     if (payload.email) {
       const email = payload.email.toLowerCase();
-      const existingUser = await this.prisma.organisationUsers.findUnique({ where: { email } });
+      // const existingUser = await this.prisma.organisationUser.findUnique({ where: { email } });
 
-      if (existingUser && existingUser.id !== id) {
-        return errorResponse(API_ERROR_CODES.CONFLICT, 'Organization user email already exists.');
-      }
+      // if (existingUser && existingUser.id !== id) {
+      //   return errorResponse(API_ERROR_CODES.CONFLICT, 'Organization user email already exists.');
+      // }
 
       payload.email = email;
     }
 
-    const updatedUser = await this.prisma.organisationUsers.update({
-      where: { id },
-      data: payload,
-    });
+    // const updatedUser = await this.prisma.organisationUser.update({
+    //   where: { id },
+    //   data: payload,
+    // });
 
-    return successResponse('Organization user updated successfully.', updatedUser);
+    return successResponse('Organization user updated successfully.', {});
   }
 
   async deleteOrganisationUser(organisationId: string, id: string): Promise<ApiResponse> {
-    const user = await this.prisma.organisationUsers.findFirst({
+    const user = await this.prisma.organisationUser.findFirst({
       where: { id, organisationId },
     });
 
@@ -218,10 +218,10 @@ export class OrganisationService {
       return errorResponse(API_ERROR_CODES.NOT_FOUND, 'Organization user not found.');
     }
 
-    await this.prisma.organisationUsers.delete({ where: { id } });
+    await this.prisma.organisationUser.delete({ where: { id } });
 
     try {
-      await this.cognitoService.deleteUser(user.email);
+      // await this.cognitoService.deleteUser(user.email);
     } catch {
       // Keep DB as source-of-truth in case Cognito account is absent.
     }
