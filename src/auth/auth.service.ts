@@ -1,22 +1,31 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  InternalServerErrorException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { API_ERROR_CODES } from 'src/common/constants/error-codes';
 import {
   CognitoIdentityProviderClient,
   // AdminInitiateAuthCommand,
   // AdminCreateUserCommand,
-  ForgotPasswordCommand,
   ConfirmForgotPasswordCommand,
   InitiateAuthCommand,
   RespondToAuthChallengeCommand,
-  SignUpCommand,
   AdminDeleteUserCommand,
   // AdminUpdateUserAttributesCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { ConfigService } from '@nestjs/config';
-import { createHmac, randomUUID } from 'crypto';
+import { createHmac, randomUUID, randomBytes } from 'crypto';
 import { PrismaService } from 'src/database/prisma.service';
-import { ApiResponse, errorResponse, successResponse } from 'src/utils/api-response';
+import {
+  ApiResponse,
+  errorResponse,
+  successResponse,
+} from 'src/utils/api-response';
 import { AddUserDto } from './dto/add-user.dto';
+import { CognitoService } from 'src/cognito/cognito.service';
+import { PasswordResetRepository } from './repositories/password-reset.repository';
 
 @Injectable()
 export class AuthService {
@@ -26,6 +35,8 @@ export class AuthService {
   constructor(
     private config: ConfigService,
     private prisma: PrismaService,
+    private readonly cognitoService: CognitoService,
+    private readonly dynamoRempo: PasswordResetRepository,
   ) {
     this.client = new CognitoIdentityProviderClient();
     //   {
@@ -63,7 +74,10 @@ export class AuthService {
       `;
 
       if (existingUser.length > 0) {
-        return errorResponse(API_ERROR_CODES.CONFLICT, 'This email is already registered.');
+        return errorResponse(
+          API_ERROR_CODES.CONFLICT,
+          'This email is already registered.',
+        );
       }
       // 1. Cognito SignUp
       // const cognitoCommand = new SignUpCommand({
@@ -95,13 +109,15 @@ export class AuthService {
       ]);
 
       await this.assignRoleToPlatformUser(platformUserId, dto.role);
-      const newUser = await this.prisma.$queryRaw<{
-        id: string;
-        userId: string;
-        firstName: string;
-        lastName: string | null;
-        email: string;
-      }[]>`
+      const newUser = await this.prisma.$queryRaw<
+        {
+          id: string;
+          userId: string;
+          firstName: string;
+          lastName: string | null;
+          email: string;
+        }[]
+      >`
         SELECT
           pu.id AS "id",
           pu.user_id AS "userId",
@@ -115,7 +131,10 @@ export class AuthService {
       `;
 
       // 3. Format Standardized Response
-      return successResponse('User registered successfully.', newUser[0] ?? null);
+      return successResponse(
+        'User registered successfully.',
+        newUser[0] ?? null,
+      );
     } catch (error: any) {
       // 4. Handle Standardized Error
       console.log('err:', error);
@@ -126,11 +145,10 @@ export class AuthService {
   }
 
   //login fucntion
-  async login(email: string, pass: string) {
-    
+  async login1(email: string, pass: string) {
     const command = new InitiateAuthCommand({
       AuthFlow: 'USER_PASSWORD_AUTH',
-        // UserPoolId: this.config.get('COGNITO_USER_POOL_ID')!,
+      // UserPoolId: this.config.get('COGNITO_USER_POOL_ID')!,
       ClientId: this.config.get('COGNITO_CLIENT_ID')!,
       AuthParameters: {
         USERNAME: email,
@@ -174,7 +192,7 @@ export class AuthService {
       return {
         accessToken: response.AuthenticationResult?.AccessToken,
         refreshToken: response.AuthenticationResult?.RefreshToken,
-        ExpiresIn:response.AuthenticationResult?.ExpiresIn,
+        ExpiresIn: response.AuthenticationResult?.ExpiresIn,
         TokenType: response.AuthenticationResult?.TokenType,
         // permissions,
       };
@@ -185,26 +203,246 @@ export class AuthService {
     }
   }
 
-  // JOURNEY 3: Forgot Password
-  async forgotPassword(email: string) {
-    const command = new ForgotPasswordCommand({
-      ClientId: this.config.get('COGNITO_CLIENT_ID')!,
-      Username: email,
+  async login(email: string, password: string) {
+    try {
+      console.log('email: ', email, 'password', password);
+      const cognitoResponse = await this.cognitoService.login(email, password);
+
+      const authResult = cognitoResponse.AuthenticationResult;
+
+      if (!authResult) {
+        throw new UnauthorizedException();
+      }
+
+      const user = await this.prisma.user.findUnique({
+        where: { email },
+        include: {
+          platformUserRoles: {
+            include: {
+              role: {
+                include: {
+                  rolePermissions: {
+                    include: {
+                      permission: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!user) {
+        throw new UnauthorizedException();
+      }
+
+      // Extract roles
+      const roles = user.platformUserRoles.map((r) => r.role.name);
+
+      // Extract permissions
+      const permissions = user.platformUserRoles.flatMap((r) =>
+        r.role.rolePermissions.map((rp) => rp.permission.name),
+      );
+
+      return successResponse('Login successful.', {
+        access_token: authResult.AccessToken,
+        refresh_token: authResult.RefreshToken,
+        token_type: authResult.TokenType,
+        expires_in: authResult.ExpiresIn,
+        user: {
+          id: user.id,
+          first_name: user.firstName,
+          last_name: user.lastName,
+          email: user.email,
+          roles,
+          permissions,
+          last_login_at: new Date(),
+        },
+      });
+    } catch (error) {
+      console.log('errr: ', error);
+      return errorResponse(
+        API_ERROR_CODES.INVALID_CREDENTIALS,
+        'Invalid email or password',
+      );
+    }
+  }
+
+  async adminLogin(email: string, password: string) {
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const adminUser = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      select: {
+        id: true,
+        platformUsers: {
+          where: { status: true },
+          select: { id: true },
+          take: 1,
+        },
+        platformUserRoles: {
+          where: { role: { name: 'admin' } },
+          select: { id: true },
+          take: 1,
+        },
+      },
     });
 
-    const res = await this.client.send(command);
-    console.log('res: ', res);
-    return res;
+    if (
+      !adminUser ||
+      adminUser.platformUsers.length === 0 ||
+      adminUser.platformUserRoles.length === 0
+    ) {
+      throw new UnauthorizedException('Unauthorized access.');
+    }
+
+    const command = new InitiateAuthCommand({
+      AuthFlow: 'USER_PASSWORD_AUTH',
+      ClientId: this.config.get('COGNITO_CLIENT_ID')!,
+      AuthParameters: {
+        USERNAME: normalizedEmail,
+        PASSWORD: password,
+        SECRET_HASH: this.calculateSecretHash(normalizedEmail),
+      },
+    });
+
+    try {
+      const response = await this.client.send(command);
+      const authResult = response.AuthenticationResult;
+
+      if (!authResult?.AccessToken) {
+        throw new UnauthorizedException('Invalid email or password.');
+      }
+
+      await this.prisma.platformUser.update({
+        where: { id: adminUser.platformUsers[0].id },
+        data: { lastLoginAt: new Date(), updatedAt: new Date() },
+      });
+
+      return successResponse('Admin login successful.', {
+        accessToken: authResult.AccessToken,
+        refreshToken: authResult.RefreshToken,
+        idToken: authResult.IdToken,
+        expiresIn: authResult.ExpiresIn,
+        tokenType: authResult.TokenType,
+      });
+    } catch (error: any) {
+      if (
+        error instanceof UnauthorizedException ||
+        ['NotAuthorizedException', 'UserNotFoundException'].includes(
+          error?.name,
+        )
+      ) {
+        throw new UnauthorizedException('Invalid email or password.');
+      }
+
+      throw new InternalServerErrorException('Admin login failed.');
+    }
+  }
+
+  // JOURNEY 3: Forgot Password
+  async forgotPassword(email: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+    });
+    console.log('user::', user);
+
+    if (user) {
+      const token = randomBytes(32).toString('hex');
+
+      try {
+        // Save to DynamoDB via Repository
+        await this.dynamoRempo.saveToken(user.id, token, 3600);
+      } catch (error) {
+        console.error('Failed to save password reset token to DynamoDB:', error);
+        throw new InternalServerErrorException(
+          'Password reset is temporarily unavailable. Please try again.',
+        );
+      }
+
+      // Send Email via SES...
+      console.log(`Sending SES email to ${email} with token ${token}`);
+      // await this.sesService.sendResetEmail(email, token);
+    }
+
+    return {
+      success: true,
+      message: "If the email is registered in our system, a password reset link has been sent.",
+    };
   }
   //   reset pawd
-  async resetPassword(email: string, code: string, newPassword: string) {
-    const command = new ConfirmForgotPasswordCommand({
-      ClientId: this.config.get('COGNITO_CLIENT_ID')!,
-      Username: email,
-      ConfirmationCode: code,
-      Password: newPassword,
+  async resetPassword(token: string, newPassword: string): Promise<ApiResponse> {
+    const passwordValidationErrors = this.validatePasswordPolicy(newPassword);
+    if (passwordValidationErrors.length > 0) {
+      throw new BadRequestException({
+        code: API_ERROR_CODES.VALIDATION,
+        message: 'Validation failed. Please check the input fields.',
+        details: passwordValidationErrors.map((message) => ({
+          field: 'new_password',
+          message,
+        })),
+      });
+    }
+
+    const tokenRecord = await this.dynamoRempo.findByToken(token);
+    if (!tokenRecord) {
+      throw new BadRequestException({
+        code: API_ERROR_CODES.INVALID_TOKEN,
+        message: 'The token is invalid.',
+        details: [],
+      });
+    }
+
+    const nowInSeconds = Math.floor(Date.now() / 1000);
+    if (!tokenRecord.expires_at || tokenRecord.expires_at <= nowInSeconds) {
+      throw new BadRequestException({
+        code: API_ERROR_CODES.INVALID_TOKEN,
+        message: 'The token is invalid or has expired.',
+        details: [],
+      });
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: tokenRecord.user_id },
+      select: { email: true },
     });
-    return await this.client.send(command);
+
+    if (!user?.email) {
+      throw new BadRequestException({
+        code: API_ERROR_CODES.INVALID_TOKEN,
+        message: 'The token is invalid or has expired.',
+        details: [],
+      });
+    }
+
+    try {
+      await this.cognitoService.setUserPassword(user.email, newPassword);
+    } catch (error: any) {
+      if (error?.name === 'InvalidPasswordException') {
+        throw new BadRequestException({
+          code: API_ERROR_CODES.VALIDATION,
+          message: 'Validation failed. Please check the input fields.',
+          details: [{ field: 'new_password', message: error?.message }],
+        });
+      }
+
+      console.error('Cognito reset password failed:', error);
+      throw new InternalServerErrorException(
+        'Password reset is temporarily unavailable. Please try again.',
+      );
+    }
+
+    await this.dynamoRempo.deleteToken(token);
+
+    return successResponse(
+      'Password has been reset successfully.',
+      {},
+      {
+        timestamp: new Date().toISOString(),
+        request_id: `req_${Date.now()}`,
+      },
+    );
   }
 
   // async forgotPassword(email: string) {
@@ -292,6 +530,30 @@ export class AuthService {
     return createHmac('sha256', clientSecret)
       .update(username + clientId)
       .digest('base64');
+  }
+
+  private validatePasswordPolicy(password: string): string[] {
+    const errors: string[] = [];
+
+    if (password.length < 8) {
+      errors.push('Password must be at least 8 characters long.');
+    }
+    if (!/[A-Z]/.test(password)) {
+      errors.push('Password must contain at least 1 uppercase character.');
+    }
+    if (!/[a-z]/.test(password)) {
+      errors.push('Password must contain at least 1 lowercase character.');
+    }
+    if (!/[0-9]/.test(password)) {
+      errors.push('Password must contain at least 1 number.');
+    }
+    if (!/[\^$*.\[\]{}()?\-"!@#%&/\\,><':;|_~`+=]/.test(password)) {
+      errors.push(
+        'Password must contain at least 1 special character from the allowed set.',
+      );
+    }
+
+    return errors;
   }
 
   private async assignRoleToPlatformUser(

@@ -1,5 +1,5 @@
 import env from 'src/helpers/env.helper';
-import { axisDataConfig, hotelbedsConfig } from './vendors.config';
+// import { axisDataConfig, hotelbedsConfig } from './vendors.config';
 
 export const config = {
     app: {
@@ -10,26 +10,13 @@ export const config = {
     db: {
         url: env('DATABASE_URL', 'postgresql://hyperlegal:hyperlegal@db:5432/mydb?schema=hyperlegal'),
     },
-    vendors: {
-        default: axisDataConfig,
-        axisData: axisDataConfig,
-        hotelbeds: hotelbedsConfig,
+    aws: {
+    region: process.env.AWS_REGION,
+    cognito: {
+      userPoolId: process.env.COGNITO_USER_POOL_ID,
+      clientId: process.env.COGNITO_CLIENT_ID,
     },
-    googlePlaces: {
-        url: env('GOOGLE_PLACE_URL'),
-        apiKey: env('GOOGLE_API_KEY'),
-        rateLimit: parseInt(env('GOOGLE_RATE_LIMIT', '3')),
-    },
-    rabbbitMq:{
-        url:env('RABBITMQ_URL')
-    },
-    sentry:{
-        url:env('SENTRY_DSN')
-    },
-    cron:{
-        concurrency: parseInt(env('CONCURRENCY', '3')),
-        totalData: parseInt(env('TOTALDATA', '173000')),
-        chunkSize: parseInt(env('CHUNKSIZE', '1000')),
-    }
+  },
+    
 
 };

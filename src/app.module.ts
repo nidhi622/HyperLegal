@@ -7,6 +7,7 @@ import { CognitoModule } from './cognito/cognito.module';
 import { DatabaseModule } from './database';
 import { OrganisationModule } from './organisation/organisation.module';
 import { UsersModule } from './users/users.module';
+import { DynamoDBModule } from './dynamoDB/dynamoDB.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     UsersModule,
     OrganisationModule,
+    DynamoDBModule,
   ],
   controllers: [AppController],
   providers: [AppService],

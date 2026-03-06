@@ -9,7 +9,7 @@ import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { ConfirmNewPasswordDto } from './dto/confirm-new-user.dto';
 
-@Controller('auth')
+@Controller(['auth', 'platform/auth'])
 export class AuthController {
   constructor(private authService: AuthService) {}
 
@@ -23,18 +23,20 @@ export class AuthController {
   @ApiOperation({ summary: 'Login a user and return access token' })
   @ApiResponse({ status: 200, description: 'Successfully logged in' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
- async login(@Body() request: LoginDto) {
+  async login(@Body() request: LoginDto) {
     return this.authService.login(request.email, request.password);
   }
 
+  @ApiOperation({ summary: 'Forgot Password' })
   @Post('forgot-password')
   async forgot(@Body() dto: ForgotPasswordDto) {
+    console.log("api called with req:: ", dto)
     return this.authService.forgotPassword(dto.email);
   }
 
   @Post('reset-password')
   async reset(@Body() dto: ResetPasswordDto) {
-    return this.authService.resetPassword(dto.email, dto.code, dto.newPassword);
+    return this.authService.resetPassword(dto.token, dto.new_password);
   }
 
   @Post('confirm-new-password')

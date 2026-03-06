@@ -9,7 +9,7 @@ import {
   IsString,
 } from 'class-validator';
 
-export class CreatePlatformUserDto {
+export class CreateUserDto {
   @ApiProperty({ example: 'Mike' })
   @IsString()
   @IsNotEmpty()
@@ -24,11 +24,18 @@ export class CreatePlatformUserDto {
   @IsEmail()
   email: string;
 
-  @ApiProperty({ enum: UserRole, example: UserRole.admin })
-  @IsEnum(UserRole)
-  role: UserRole;
+  @ApiProperty({
+    enum: UserRole,
+    example: UserRole.standard,
+    required: false,
+    default: UserRole.standard,
+  })
 
-  @ApiProperty({ required: false, example: true })
+  @IsEnum(UserRole)
+  @IsOptional()
+  role?: UserRole;
+
+  @ApiProperty({ required: false, example: true, default: true })
   @IsOptional()
   @IsBoolean()
   status?: boolean;
@@ -39,4 +46,4 @@ export class CreatePlatformUserDto {
   sendInvite?: boolean;
 }
 
-export class UpdatePlatformUserDto extends PartialType(CreatePlatformUserDto) {}
+export class UpdateUserDto extends PartialType(CreateUserDto) {}

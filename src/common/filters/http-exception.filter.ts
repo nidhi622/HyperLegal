@@ -24,7 +24,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let code: ApiErrorCode = API_ERROR_CODES.INTERNAL;
     let message = 'Something went wrong.';
     let details: Array<Record<string, any>> = [];
-
+    console.log("excpetion", exception);
     if (exception instanceof HttpException) {
       
       status = exception.getStatus();
@@ -41,6 +41,10 @@ export class HttpExceptionFilter implements ExceptionFilter {
           message = rawMessage[0] ?? 'Invalid input provided.';
           details = rawMessage.map((issue) => ({ issue }));
           code = API_ERROR_CODES.VALIDATION;
+        } else if (payload.code && payload.message) {
+          message = payload.message;
+          code = payload.code as ApiErrorCode;
+          details = Array.isArray(payload.details) ? payload.details : [];
         } else {
           message = rawMessage ?? payload.error ?? 'Request failed.';
           code = mapHttpStatusToErrorCode(status);

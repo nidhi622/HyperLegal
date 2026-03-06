@@ -71,6 +71,7 @@ model PlatformUser {
 
   user User @relation(fields: [userId], references: [id])
 
+  @@unique([userId])
   @@index([userId])
   @@map("platform_users")
 }
@@ -85,10 +86,10 @@ model PlatformRole {
   updatedBy String? @map("updated_by") @db.Uuid
 
   // Relations
-  permissions PlatformRolePermission[]
-  userRoles   PlatformUserRole[]
-  creator     User?                    @relation("PlatformRoleCreator", fields: [createdBy], references: [id])
-  updater     User?                    @relation("PlatformRoleUpdater", fields: [updatedBy], references: [id])
+  rolePermissions PlatformRolePermission[]
+  userRoles       PlatformUserRole[]
+  creator         User?                    @relation("PlatformRoleCreator", fields: [createdBy], references: [id])
+  updater         User?                    @relation("PlatformRoleUpdater", fields: [updatedBy], references: [id])
 
   @@map("platform_roles")
 }
@@ -152,7 +153,7 @@ model Organisation {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   name            String   @db.VarChar(255)
   email           String   @unique @db.VarChar(255)
-  domain          String?  
+  domain          String?
   redFlagPolicies Json?    @map("red_flag_policies")
   status          Boolean  @default(true)
   createdAt       DateTime @default(now()) @map("created_at")
@@ -179,6 +180,7 @@ model OrganisationUser {
   organisation Organisation @relation(fields: [organisationId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
 
+  @@unique([userId])
   @@index([organisationId])
   @@index([userId])
   @@map("organisation_users")

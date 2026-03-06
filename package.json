@@ -18,10 +18,13 @@
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
     "test:e2e": "jest --config ./test/jest-e2e.json",
-    "seed": "ts-node prisma/seed/seed.ts"
+    "seed": "ts-node prisma/seed/seed.ts",
+    "dynamodb:tables:create": "ts-node src/dynamoDB/create-tables.ts"
   },
   "dependencies": {
     "@aws-sdk/client-cognito-identity-provider": "^3.996.0",
+    "@aws-sdk/client-dynamodb": "^3.1002.0",
+    "@aws-sdk/lib-dynamodb": "^3.1002.0",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.3",

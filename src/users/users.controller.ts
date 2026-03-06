@@ -12,7 +12,7 @@ import {
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
 import { Permissions } from 'src/auth/permissions.decorator';
-import { CreatePlatformUserDto, UpdatePlatformUserDto } from './dto/user.dto';
+import { CreateUserDto, UpdateUserDto } from './dto/user.dto';
 import { UsersService } from './users.service';
 
 @Controller('users')
@@ -24,7 +24,7 @@ export class UsersController {
 
   @Post()
   @Permissions('platform_users.create')
-  create(@Body() payload: CreatePlatformUserDto) {
+  create(@Body() payload: CreateUserDto) {
     return this.usersService.create(payload);
   }
 
@@ -44,7 +44,7 @@ export class UsersController {
   @Permissions('platform_users.update')
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() payload: UpdatePlatformUserDto,
+    @Body() payload: UpdateUserDto,
   ) {
     return this.usersService.update(id, payload);
   }
