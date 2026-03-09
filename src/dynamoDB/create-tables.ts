@@ -1,10 +1,12 @@
 import { DynamoDBClient, CreateTableCommand, UpdateTimeToLiveCommand, DescribeTableCommand } from "@aws-sdk/client-dynamodb";
 import { PasswordResetTable } from "./tables/password-reset.table";
+import config from "src/configs/config";
 
-const endPoint = process.env.DYNAMODB_ENDPOINT?.trim() || "http://localhost:8000";
+
+const endpoint = process.env.DYNAMODB_ENDPOINT?.trim() || "http://localhost:8000";
 
 const client = new DynamoDBClient({
-   endpoint: endPoint,
+  endpoint,
   region: "local",
   credentials: { accessKeyId: "gktsaw", secretAccessKey: "j9gcwp" }
 });
@@ -20,7 +22,10 @@ async function tableCreation() {
       await client.send(new DescribeTableCommand({ TableName: table.TableName }));
       console.log(`⚠️ Table ${table.TableName} already exists. Skipping.`);
     } catch (err: any) {
-      console.log(`⚠️ Table ${table.TableName} does not exist. Creating...`,err);
+      if (err.name !== "ResourceNotFoundException") {
+        throw err;
+      }
+      console.log(`⚠️ Table ${table.TableName} does not exist. Creating...`);
       if (err.name === "ResourceNotFoundException") {
         // 1. Create Table
         await client.send(new CreateTableCommand(table));

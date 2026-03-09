@@ -4,6 +4,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { NodeHttpHandler } from '@smithy/node-http-handler';
 import { PrismaService } from 'src/database/prisma.service';
+import config from 'src/configs/config';
 
 @Global() // This makes it available everywhere without re-importing
 @Module({
@@ -11,11 +12,9 @@ import { PrismaService } from 'src/database/prisma.service';
     {
       provide: 'DYNAMO_DB_CLIENT', // This MUST match your @Inject() string
       useFactory: () => {
-        const rawEndpoint = process.env.DYNAMODB_ENDPOINT?.trim();
-        const endpoint = rawEndpoint || 'http://localhost:8000';
+        const endpoint = config.aws.dynamodb.endpoint || 'http://localhost:8000';
 
         const client = new DynamoDBClient({
-          //   region: process.env.AWS_REGION || 'us-east-1',
           region: 'local',
           endpoint,
           maxAttempts: 1,
@@ -24,8 +23,8 @@ import { PrismaService } from 'src/database/prisma.service';
             requestTimeout: 5000,
           }),
           credentials: {
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'gktsaw',
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'j9gcwp',
+            accessKeyId: config.aws.accessKeyId || 'gktsaw',
+            secretAccessKey: config.aws.secretAccessKey || 'j9gcwp',
           },
         });
         return DynamoDBDocumentClient.from(client);

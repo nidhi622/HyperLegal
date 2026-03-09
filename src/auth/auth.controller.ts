@@ -13,11 +13,7 @@ import { ConfirmNewPasswordDto } from './dto/confirm-new-user.dto';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
-  @Post('add-user')
-  @ApiOperation({ summary: 'Invite a new user to a law firm' })
-  async addUser(@Body() request: AddUserDto) {
-    return this.authService.addUser(request);
-  }
+  
 
   @Post('login')
   @ApiOperation({ summary: 'Login a user and return access token' })

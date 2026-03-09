@@ -1,16 +1,17 @@
 // src/infrastructure/dynamodb.provider.ts
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
+import config from 'src/configs/config';
 
 export const DynamoDBProvider = {
   provide: 'DYNAMO_DB_CLIENT',
   useFactory: () => {
     const client = new DynamoDBClient({
-      region: process.env.AWS_REGION || 'us-east-1',
-      endpoint: process.env.DYNAMODB_ENDPOINT || undefined, // undefined triggers real AWS
+      region: config.aws.region,
+      endpoint: config.aws.dynamodb.endpoint, // undefined triggers real AWS
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'fake',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'fake',
+        accessKeyId: config.aws.accessKeyId || 'fake',
+        secretAccessKey: config.aws.secretAccessKey || 'fake',
       },
     });
     return DynamoDBDocumentClient.from(client);

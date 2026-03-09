@@ -8,6 +8,7 @@ import { DatabaseModule } from './database';
 import { OrganisationModule } from './organisation/organisation.module';
 import { UsersModule } from './users/users.module';
 import { DynamoDBModule } from './dynamoDB/dynamoDB.module';
+import { AwsModule } from './aws/aws.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { DynamoDBModule } from './dynamoDB/dynamoDB.module';
     UsersModule,
     OrganisationModule,
     DynamoDBModule,
+    AwsModule
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -1,6 +1,6 @@
-import { ENV } from 'src/constant';
+export default function env(key: string, defaultValue?: any) {
+  const normalizedKey = key.toUpperCase();
+  const value = process.env[normalizedKey];
 
-export default function env(string: string, defaultValue?: any) {
-    string = string.toUpperCase();
-    return ENV.hasOwnProperty(string) ? ENV[string] : defaultValue;
+  return value === undefined || value === '' ? defaultValue : value;
 }

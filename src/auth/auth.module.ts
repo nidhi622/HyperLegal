@@ -7,10 +7,11 @@ import { AdminAuthController } from './admin-auth.controller';
 import { CognitoService } from 'src/cognito/cognito.service';
 import { PasswordResetRepository } from './repositories/password-reset.repository';
 import { DynamoDBModule } from 'src/dynamoDB/dynamoDB.module';
+import { SesService } from 'src/aws/ses.service';
 
 @Module({
   // imports: [DatabaseModule],
   controllers: [AuthController, AdminAuthController],
-  providers: [AuthService, PrismaService,CognitoService,PasswordResetRepository],
+  providers: [AuthService, PrismaService,CognitoService,PasswordResetRepository,SesService],
 })
 export class AuthModule {}

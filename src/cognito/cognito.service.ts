@@ -27,12 +27,29 @@ export class CognitoService {
   private readonly client: CognitoIdentityProviderClient;
 
   constructor(private readonly config: ConfigService) {
+    const accessKeyId =
+      this.config.get<string>('AWS_IAM_USER_ACCESS_KEY_ID') ??
+      this.config.get<string>('AWS_IAM_USER_ACCESS_ID');
+    const secretAccessKey =
+      this.config.get<string>('AWS_IAM_USER_SECRET_ACCESS_KEY') ??
+      this.config.get<string>('AWS_IAM_USER_SECRET_KEY');
+
+    if (!accessKeyId || !secretAccessKey) {
+      throw new Error(
+        'Missing IAM credentials. Set AWS_IAM_USER_ACCESS_KEY_ID and AWS_IAM_USER_SECRET_ACCESS_KEY in env.',
+      );
+    }
+
     this.client = new CognitoIdentityProviderClient({
       region: this.config.get<string>('AWS_REGION'),
+      credentials: {
+        accessKeyId,
+        secretAccessKey,
+      },
     });
   }
 
-  async loginWithAdminInitiateAuthCommand(email: string, password: string) {
+  async login(email: string, password: string) {
     const command = new AdminInitiateAuthCommand({
       UserPoolId: this.config.get<string>('COGNITO_USER_POOL_ID'),
       ClientId: this.config.get<string>('COGNITO_CLIENT_ID'),
@@ -40,13 +57,13 @@ export class CognitoService {
       AuthParameters: {
         USERNAME: email,
         PASSWORD: password,
+        SECRET_HASH: this.calculateSecretHash(email),
       },
     });
-
     return this.client.send(command);
   }
 
-  async login(email: string, pass: string) {
+  async login1(email: string, pass: string) {
     const command = new InitiateAuthCommand({
       AuthFlow: 'USER_PASSWORD_AUTH',
       // UserPoolId: this.config.get('COGNITO_USER_POOL_ID')!,
@@ -69,7 +86,6 @@ export class CognitoService {
         'response.AuthenticationResult: ',
         response.AuthenticationResult,
       );
-      
 
       return response;
     } catch (error) {
@@ -79,6 +95,7 @@ export class CognitoService {
   }
 
   async forgotPassword(email: string) {
+    console.log('email: ', email);
     const command = new ForgotPasswordCommand({
       ClientId: this.config.get<string>('COGNITO_CLIENT_ID'),
       Username: email,
@@ -156,7 +173,6 @@ export class CognitoService {
     return { userSub: result.UserSub ?? null };
   }
 
-
   async deleteUser(email: string): Promise<void> {
     const userPoolId = this.config.get<string>('COGNITO_USER_POOL_ID');
     if (!userPoolId) {
@@ -174,29 +190,30 @@ export class CognitoService {
   async setUserPassword(email: string, newPassword: string): Promise<void> {
     const userPoolId = this.config.get<string>('COGNITO_USER_POOL_ID');
 
-    console.log("userPoolId::", userPoolId)
+    console.log('userPoolId::', userPoolId);
     if (!userPoolId) {
       throw new Error('COGNITO_USER_POOL_ID is not configured');
     }
 
-    try{
+    try {
       await this.client.send(
-      new AdminSetUserPasswordCommand({
-        UserPoolId: userPoolId,
-        Username: email.toLowerCase(),
-        Password: newPassword,
-        Permanent: true,
-      }),
-    );
-    }catch(err){
-      console.log("err in settign pwdd::", err)
+        new AdminSetUserPasswordCommand({
+          UserPoolId: userPoolId,
+          Username: email.toLowerCase(),
+          Password: newPassword,
+          Permanent: true,
+        }),
+      );
+    } catch (err) {
+      console.log('err in settign pwdd::', err);
+      throw err;
     }
   }
 
   private calculateSecretHash(username: string): string {
     const clientId = this.config.get('COGNITO_CLIENT_ID')!;
     const clientSecret = this.config.get('COGNITO_CLIENT_SECRET')!;
-
+    console.log('clientSecret: ', clientSecret);
     return createHmac('sha256', clientSecret)
       .update(username + clientId)
       .digest('base64');

@@ -15,7 +15,6 @@ import {
 @Catch()
 export class HttpExceptionFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost): void {
-
     console.log('exception: ', exception);
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
@@ -24,9 +23,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
     let code: ApiErrorCode = API_ERROR_CODES.INTERNAL;
     let message = 'Something went wrong.';
     let details: Array<Record<string, any>> = [];
-    console.log("excpetion", exception);
-    if (exception instanceof HttpException) {
-      
+    console.log('excpetion', exception);
+    if ((exception as any)?.name === 'NotAuthorizedException') {
+      status = HttpStatus.UNAUTHORIZED;
+      code = API_ERROR_CODES.INVALID_CREDENTIALS;
+      message = 'Incorrect email or Password.';
+    } else if (exception instanceof HttpException) {
       status = exception.getStatus();
       const exceptionResponse = exception.getResponse();
 

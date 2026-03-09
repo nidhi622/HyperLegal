@@ -1,8 +1,10 @@
+import config from 'src/configs/config';
+
 export const getDynamoConfig = () => ({
-  region: process.env.AWS_REGION || 'local',
-  endpoint: process.env.DYNAMODB_ENDPOINT || 'http://localhost:8000',
+  region: config.aws.region || 'local',
+  endpoint: config.aws.dynamodb.endpoint || 'http://localhost:8000',
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'fake',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'fake',
+    accessKeyId: config.aws.accessKeyId || 'fake',
+    secretAccessKey: config.aws.secretAccessKey || 'fake',
   },
 });
