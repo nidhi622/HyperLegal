@@ -7,31 +7,32 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  MaxLength,
 } from 'class-validator';
 
+export enum OrganisationRole {
+  STANDARD = 'Standard User',
+  ADMIN = 'Company Admin',
+}
+
 export class CreateOrganisationDto {
-  @ApiProperty({ example: 'Pearson Hardman' })
+  @ApiProperty({ 
+    example: 'ABC Law Firm', 
+    description: 'The formal name of the organisation' 
+  })
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Name is required.' })
+  @MaxLength(100)
   name: string;
 
-  @ApiProperty({ example: 'admin@pearsonhardman.com' })
-  @IsEmail()
+  @ApiProperty({ 
+    example: 'contact@abclaw.com', 
+    description: 'Primary contact email for the organisation' 
+  })
+  @IsEmail({}, { message: 'Please provide a valid email address.' })
+  @IsNotEmpty({ message: 'Email is required.' })
+  @MaxLength(255)
   email: string;
-
-  @ApiProperty({ example: 'pearsonhardman.com', required: false })
-  @IsString()
-  @IsOptional()
-  domain?: string;
-
-  @ApiProperty({ required: false, example: { policy: 'default' } })
-  @IsOptional()
-  redFlagPolicies?: Record<string, unknown>;
-
-  @ApiProperty({ required: false, example: true })
-  @IsOptional()
-  @IsBoolean()
-  status?: boolean;
 }
 
 export class UpdateOrganisationDto extends PartialType(CreateOrganisationDto) {}

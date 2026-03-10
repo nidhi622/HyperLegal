@@ -52,6 +52,8 @@ model User {
   updatedPlatformPermissions     PlatformPermission[]     @relation("PlatformPermissionUpdater")
   createdPlatformPermissions     PlatformPermission[]     @relation("PlatformPermissionCreator")
   createdPlatformRolePermissions PlatformRolePermission[] @relation("PlatformRolePermissionCreator")
+  createdOrganisations           Organisation[]           @relation("OrganisationCreator")
+  updatedOrganisations           Organisation[]           @relation("OrganisationUpdater")
 
   @@map("users")
 }
@@ -151,13 +153,19 @@ model PlatformUserRole {
 
 model Organisation {
   id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name            String   @db.VarChar(255)
+  referenceNumber String   @map("reference_number") @db.VarChar(50)
+  name            String   @db.VarChar(100)
   email           String   @unique @db.VarChar(255)
-  domain          String?
-  redFlagPolicies Json?    @map("red_flag_policies")
+  // domain          String?
+  // redFlagPolicies Json?    @map("red_flag_policies")
   status          Boolean  @default(true)
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
+  createdBy       String?  @map("created_by") @db.Uuid
+  updatedBy       String?  @map("updated_by") @db.Uuid
+
+  creator User? @relation("OrganisationCreator", fields: [createdBy], references: [id])
+  updater User? @relation("OrganisationUpdater", fields: [updatedBy], references: [id])
 
   users                OrganisationUser[]
   roles                OrganisationRole[]
@@ -172,10 +180,12 @@ model OrganisationUser {
   organisationId  String    @map("organisation_id") @db.Uuid
   userId          String    @map("user_id") @db.Uuid
   status          String    @default("Invited")
-  invitationToken String?   @unique @map("invitation_token")
-  tokenExpiry     DateTime? @map("token_expiry")
+  // invitationToken String?   @unique @map("invitation_token")
+  // tokenExpiry     DateTime? @map("token_expiry")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
+  lastLoginAt     DateTime? @map("last_login_at")
+  cognitoSub      String    @unique @map("cognito_sub")
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
@@ -190,6 +200,10 @@ model OrganisationRole {
   id             String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organisationId String @map("organisation_id") @db.Uuid
   name           String @db.VarChar(50)
+
+  created_by
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
 
   organisation Organisation           @relation(fields: [organisationId], references: [id])
   userRoles    OrganisationUserRole[]

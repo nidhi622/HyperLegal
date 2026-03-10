@@ -1,0 +1,214 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  standard
+
+  admin
+}
+
+// -----------------------------------------------------------------------------
+// GLOBAL USER MODELS
+// -----------------------------------------------------------------------------
+
+model User {
+  id         String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  first_name String  @db.VarChar(100)
+  last_name  String? @db.VarChar(100) // Nullable as per JIRA notes
+  email      String  @unique @db.VarChar(255)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Self-referencing Foreign Keys for Audit
+  created_by String? @db.Uuid
+  updated_by String? @db.Uuid
+  creator    User?   @relation("UserCreator", fields: [created_by], references: [id])
+  updater    User?   @relation("UserUpdater", fields: [updated_by], references: [id])
+
+  created_users User[] @relation("UserCreator")
+  updated_users User[] @relation("UserUpdater")
+
+  // Relationships
+  platform_users          PlatformUser[]
+  organisation_users      OrganisationUser[]
+  platform_user_roles     PlatformUserRole[]
+  organisation_user_roles OrganisationUserRole[]
+  audit_logs              OrganisationAuditLog[]
+
+  // Audit Relations for Platform RBAC
+  // created_platform_roles      PlatformRole[]           @relation("PlatformRoleCreator")
+  // created_platform_permissions PlatformPermission[]     @relation("PlatformPermissionCreator")
+  created_platform_user_roles       PlatformUserRole[]       @relation("PlatformUserRoleCreator")
+  created_platform_roles            PlatformRole[]           @relation("PlatformRoleCreator")
+  updated_platform_roles            PlatformRole[]           @relation("PlatformRoleUpdater")
+  updated_platform_permissions      PlatformPermission[]     @relation("PlatformPermissionUpdater")
+  created_platform_role_permissions PlatformRolePermission[] @relation("PlatformRolePermissionCreator")
+  // created_platform_role_perms  PlatformRolePermission[] @relation("PlatformRolePermissionCreator")
+
+  @@map("users")
+}
+
+// -----------------------------------------------------------------------------
+// PLATFORM LEVEL (Task 1.1: Platform RBAC)
+// -----------------------------------------------------------------------------
+
+model PlatformUser {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String    @db.Uuid
+  cognito_sub   String    @unique // Required & Unique as per JIRA
+  last_login_at DateTime?
+  created_at    DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id])
+
+  @@map("platform_users")
+}
+
+model PlatformRole {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String   @unique @db.VarChar(50)
+  created_by String?  @db.Uuid
+  updated_by String?  @db.Uuid
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  permissions PlatformRolePermission[]
+  user_roles  PlatformUserRole[]
+
+  createdBy User? @relation("PlatformRoleCreator", fields: [created_by], references: [id])
+  updatedBy User? @relation("PlatformRoleUpdater", fields: [updated_by], references: [id])
+
+  @@map("platform_roles")
+}
+
+model PlatformPermission {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String   @unique @db.VarChar(100)
+  created_at DateTime @default(now())
+  updated_by String?  @db.Uuid
+  updated_at DateTime @updatedAt
+
+  role_permissions PlatformRolePermission[]
+
+  updatedBy User? @relation("PlatformPermissionUpdater", fields: [updated_by], references: [id])
+
+  @@map("platform_permissions")
+}
+
+model PlatformRolePermission {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  role_id       String   @map("platform_role_id") @db.Uuid
+  permission_id String   @map("platform_permission_id") @db.Uuid
+  created_by    String?  @db.Uuid
+  created_at    DateTime @default(now())
+
+  role       PlatformRole       @relation(fields: [role_id], references: [id])
+  permission PlatformPermission @relation(fields: [permission_id], references: [id])
+  createdBy  User?              @relation("PlatformRolePermissionCreator", fields: [created_by], references: [id])
+
+  @@map("platform_role_permissions")
+}
+
+model PlatformUserRole {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  role_id    String   @map("platform_role_id") @db.Uuid
+  // Requirement: created_by FK → users.id
+  created_by String?  @db.Uuid
+  createdBy  User?    @relation("PlatformUserRoleCreator", fields: [created_by], references: [id])
+  created_at DateTime @default(now())
+
+  user User         @relation(fields: [user_id], references: [id])
+  role PlatformRole @relation(fields: [role_id], references: [id])
+
+  @@map("platform_user_roles")
+  @@unique([user_id, role_id])
+}
+
+// -----------------------------------------------------------------------------
+// ORGANISATION LEVEL (Stories 1.2 - 2.2)
+// -----------------------------------------------------------------------------
+
+model Organisation {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name          String   @db.VarChar(255)
+  primary_email String?  @db.VarChar(255) // For Story 1.2
+  status        Boolean  @default(true) // Story 1.3: Active / Disabled toggle
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  users      OrganisationUser[]
+  roles      OrganisationRole[]
+  audit_logs OrganisationAuditLog[]
+
+  @@map("organisations")
+}
+
+model OrganisationUser {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisation_id  String    @db.Uuid
+  user_id          String    @db.Uuid
+  status           String    @default("Invited") // Story 2.2: Status = Invited
+  invitation_token String?   @unique // Story 1.4 & 2.1
+  token_expiry     DateTime? // Story 1.4: 7 days expiry
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  organisation Organisation @relation(fields: [organisation_id], references: [id])
+  user         User         @relation(fields: [user_id], references: [id])
+
+  @@map("organisation_users")
+}
+
+model OrganisationRole {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisation_id String @db.Uuid
+  name            String @db.VarChar(50) // e.g., "CompanyAdmin", "Standard"
+
+  organisation Organisation           @relation(fields: [organisation_id], references: [id])
+  user_roles   OrganisationUserRole[]
+
+  @@map("organisation_roles")
+}
+
+model OrganisationUserRole {
+  id                   String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisation_id      String @db.Uuid
+  organisation_role_id String @db.Uuid
+  user_id              String @db.Uuid
+
+  user User             @relation(fields: [user_id], references: [id])
+  role OrganisationRole @relation(fields: [organisation_role_id], references: [id])
+
+  @@map("organisation_user_roles")
+}
+
+model OrganisationAuditLog {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisation_id String?  @db.Uuid // Nullable for Platform-level logs
+  user_id         String   @db.Uuid
+  action_type     String // Story 1.2/1.3: "Organisation Created", "Organisation Updated"
+  session_id      String? // Story 1.2 requirement
+  old_values      Json? // Story 1.3 requirement
+  new_values      Json?
+  created_at      DateTime @default(now())
+
+  organisation Organisation? @relation(fields: [organisation_id], references: [id])
+  user         User          @relation(fields: [user_id], references: [id])
+
+  @@map("organisation_audit_logs")
+}

@@ -7,48 +7,94 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Put,
+  Req,
+  SetMetadata,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { JwtAuthGuard } from 'src/auth/jwt-auth.guard';
-import { OrganisationService } from './organisation.service';
-import {
-  CreateOrganisationDto,
-  CreateOrganisationUserDto,
-  UpdateOrganisationDto,
-  UpdateOrganisationUserDto,
-} from './dto/add-organisation.dto';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { PlatformAdminGuard } from 'src/common/guards/platform-admin.guard';
+import { PermissionsGuard } from 'src/common/guards/platform-admin.permission.guard';
 
-@Controller('organisation')
+import { OrganisationService } from './organisation.service';
+import { FindAllOrganisationsDto } from './dto/find-all-organisation.dto';
+import { successResponse } from 'src/utils/api-response';
+import { CreateOrganisationDto, CreateOrganisationUserDto, UpdateOrganisationUserDto } from './dto/add-organisation.dto';
+import { UpdateOrganisationDto } from './dto/update-organisation.dto';
+
+@Controller('platform/admin/organisations')
 @ApiTags('Organisation')
-// @ApiBearerAuth()
-// @UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+@UseGuards(PlatformAdminGuard)
 export class OrganisationController {
   constructor(private readonly organisationService: OrganisationService) {}
 
-  @Post()
-  create(@Body() payload: CreateOrganisationDto) {
-    return this.organisationService.createOrganisation(payload);
-  }
+  // @Post()
+  // @Permissions('organisation.create')
+  // create(@Body() payload: CreateOrganisationDto, @Req() req: any) {
+  //   return this.organisationService.createOrganisation(
+  //     payload,
+  //     req.user,
+  //     req.headers['x-session-id'] ?? req.headers['session-id'],
+  //   );
+  // }
 
   @Get()
   findAll() {
     return this.organisationService.getAllOrganisations();
   }
 
-  @Get(':id')
-  findOne(@Param('id', new ParseUUIDPipe()) id: string) {
-    return this.organisationService.getOrganisationById(id);
+  @ApiOperation({ summary: 'Retrieve a paginated list of organisations' })
+  @Post('list')
+  @SetMetadata('permission', 'organisation.view.list')
+  async listOrganisations(@Body() queryDto: FindAllOrganisationsDto) {
+    const result = await this.organisationService.findAll(queryDto);
+    return successResponse(
+      'Organisations retrieved successfully.',
+      result.data,
+      result.meta,
+    );
   }
 
-
-  // change it with PUT
-  @Patch(':id')
-  update(
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() payload: UpdateOrganisationDto,
+  @ApiOperation({ summary: 'Create a new organisation' })
+  @Post()
+  @SetMetadata('permission', 'organisation.create')
+  async createOrganisation(
+    @Body() createDto: CreateOrganisationDto,
+    @Req() req: any,
   ) {
-    return this.organisationService.updateOrganisation(id, payload);
+    const data = await this.organisationService.create(
+      createDto,
+      req.user.dbId,
+    );
+    return successResponse('Organisation added successfully.', data);
+  }
+
+  @ApiOperation({ summary: 'Update organisation details' })
+  @Put(':id')
+  @SetMetadata('permission', 'organisation.update')
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateDto: UpdateOrganisationDto,
+    @Req() req: any,
+  ) {
+    const data = await this.organisationService.update(
+      id,
+      updateDto,
+      req.user.dbId,
+    );
+    return successResponse('Organisation updated successfully.', data);
+  }
+
+  @ApiOperation({ summary: 'Get organisation details' })
+  @Get(':id')
+  @SetMetadata('permission', 'organisation.view.details')
+  async getDetails(@Param('id', ParseUUIDPipe) id: string) {
+    const data = await this.organisationService.findOne(id);
+    return successResponse(
+      'Organisation details retrieved successfully.',
+      data,
+    );
   }
 
   @Delete(':id')
@@ -61,11 +107,16 @@ export class OrganisationController {
     @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
     @Body() payload: CreateOrganisationUserDto,
   ) {
-    return this.organisationService.addOrganisationUser(organisationId, payload);
+    return this.organisationService.addOrganisationUser(
+      organisationId,
+      payload,
+    );
   }
 
   @Get(':organisationId/users')
-  getUsers(@Param('organisationId', new ParseUUIDPipe()) organisationId: string) {
+  getUsers(
+    @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
+  ) {
     return this.organisationService.getOrganisationUsers(organisationId);
   }
 
@@ -83,7 +134,11 @@ export class OrganisationController {
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() payload: UpdateOrganisationUserDto,
   ) {
-    return this.organisationService.updateOrganisationUser(organisationId, id, payload);
+    return this.organisationService.updateOrganisationUser(
+      organisationId,
+      id,
+      payload,
+    );
   }
 
   @Delete(':organisationId/users/:id')

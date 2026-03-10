@@ -48,10 +48,11 @@ services:
     restart: unless-stopped
     ports:
       - "8000:8000"
-    # command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
-    command: "-jar DynamoDBLocal.jar -sharedDb"
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath  /usr/src/app/data"
+    # command: "-jar DynamoDBLocal.jar -sharedDb"
     volumes:
       - dynamoDB_data:/home/dynamodblocal/data
+      - ./data:/usr/src/app/data
     networks:
       - wanzy
   localstack:
