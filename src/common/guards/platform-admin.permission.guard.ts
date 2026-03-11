@@ -14,6 +14,9 @@ export class PermissionsGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const cognitoSub = request.user.sub;
 
+    console.log("requets::: ", request.user)
+    console.log("requiredPermission:", requiredPermission)
+
     // Check-First: Find PlatformUser and their specific nested permissions
     const platformUser = await this.prisma.platformUser.findUnique({
       where: { cognitoSub },
@@ -36,6 +39,7 @@ export class PermissionsGuard implements CanActivate {
       }
     });
 
+    console.log("platfoemUser: ",platformUser)
     if (!platformUser) throw new NotFoundException('Platform User not found in database.');
 
     // Flatten permissions: rolePermissions -> permission -> name

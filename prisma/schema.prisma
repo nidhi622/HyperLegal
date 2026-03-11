@@ -1,8 +1,5 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// This is your Prisma schema file
+// Based on Platform and Organisation RBAC requirements
 
 generator client {
   provider     = "prisma-client"
@@ -14,10 +11,30 @@ datasource db {
   provider = "postgresql"
 }
 
-enum UserRole {
-  standard
 
-  admin
+// -----------------------------------------------------------------------------
+// CORE & LOOKUP TABLES
+// -----------------------------------------------------------------------------
+
+model Entity {
+  id      Int            @id // No Auto-increment as per JIRA
+  key     String         @db.VarChar(100)
+  name    String         @db.VarChar(100)
+  options EntityOption[]
+
+  @@map("entities")
+}
+
+model EntityOption {
+  id       Int    @id // No Auto-increment
+  entityId Int    @map("entity_id")
+  name     String @db.VarChar(100)
+
+  entity            Entity             @relation(fields: [entityId], references: [id])
+  platformUsers     PlatformUser[]     @relation("UserStatus")
+  organisationUsers OrganisationUser[] @relation("OrgUserStatus")
+
+  @@map("entity_options")
 }
 
 model User {
@@ -39,21 +56,31 @@ model User {
   updatedUsers User[] @relation("UserUpdater")
 
   // Relations
-  platformUsers         PlatformUser[]
+  platformUser          PlatformUser?
   organisationUsers     OrganisationUser[]
   platformUserRoles     PlatformUserRole[]
-  organisationUserRoles OrganisationUserRole[]
-  auditLogs             OrganisationAuditLog[]
+  organisationUserRoles OrganisationUserRole[] @relation("OrgUserRoleOwner")
 
-  // Platform Audit Relations
-  createdPlatformUserRoles       PlatformUserRole[]       @relation("PlatformUserRoleCreator")
-  createdPlatformRoles           PlatformRole[]           @relation("PlatformRoleCreator")
-  updatedPlatformRoles           PlatformRole[]           @relation("PlatformRoleUpdater")
-  updatedPlatformPermissions     PlatformPermission[]     @relation("PlatformPermissionUpdater")
-  createdPlatformPermissions     PlatformPermission[]     @relation("PlatformPermissionCreator")
-  createdPlatformRolePermissions PlatformRolePermission[] @relation("PlatformRolePermissionCreator")
-  createdOrganisations           Organisation[]           @relation("OrganisationCreator")
-  updatedOrganisations           Organisation[]           @relation("OrganisationUpdater")
+  // Platform RBAC Audit Relations
+  createdPlatformRoles       PlatformRole[]           @relation("PlatformRoleCreator")
+  updatedPlatformRoles       PlatformRole[]           @relation("PlatformRoleUpdater")
+  createdPlatformPermissions PlatformPermission[]     @relation("PlatformPermissionCreator")
+  updatedPlatformPermissions PlatformPermission[]     @relation("PlatformPermissionUpdater")
+  createdPlatformUserRoles   PlatformUserRole[]       @relation("PlatformUserRoleCreator")
+  createdPlatformRP          PlatformRolePermission[] @relation("PlatformRPCreator")
+
+  // Organisation RBAC Audit Relations
+  createdOrganisations   Organisation[]           @relation("OrgCreator")
+  updatedOrganisations   Organisation[]           @relation("OrgUpdater")
+  createdOrgRoles        OrganisationRole[]       @relation("OrgRoleCreator")
+  updatedOrgRoles        OrganisationRole[]       @relation("OrgRoleUpdater")
+  createdOrgPermissions  OrganisationPermission[] @relation("OrgPermCreator")
+  updatedOrgPermissions  OrganisationPermission[] @relation("OrgPermUpdater")
+  createdOrgUserRoles    OrganisationUserRole[]   @relation("OrgUserRoleCreator")
+  createdOrgRP           OrganisationRolePermission[] @relation("OrgRPCreator")
+  
+  platformAuditLogs      PlatformAuditLog[]
+  organisationAuditLogs  OrganisationAuditLog[]
 
   @@map("users")
 }
@@ -64,17 +91,16 @@ model User {
 
 model PlatformUser {
   id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  cognitoSub  String    @unique @map("cognito_sub")
-  status      Boolean   @default(true)
+  userId      String    @unique @map("user_id") @db.Uuid
+  statusId    Int       @map("status_id")
+  cognitoSub  String    @unique @map("cognito_sub") @db.Uuid
   lastLoginAt DateTime? @map("last_login_at")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @default(now()) @map("updated_at")
 
-  user User @relation(fields: [userId], references: [id])
+  user   User         @relation(fields: [userId], references: [id])
+  status EntityOption @relation("UserStatus", fields: [statusId], references: [id])
 
-  @@unique([userId])
-  @@index([userId])
   @@map("platform_users")
 }
 
@@ -83,15 +109,13 @@ model PlatformRole {
   name      String   @unique @db.VarChar(50)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String   @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
 
-  createdBy String? @map("created_by") @db.Uuid
-  updatedBy String? @map("updated_by") @db.Uuid
-
-  // Relations
+  creator         User                     @relation("PlatformRoleCreator", fields: [createdBy], references: [id])
+  updater         User?                    @relation("PlatformRoleUpdater", fields: [updatedBy], references: [id])
   rolePermissions PlatformRolePermission[]
   userRoles       PlatformUserRole[]
-  creator         User?                    @relation("PlatformRoleCreator", fields: [createdBy], references: [id])
-  updater         User?                    @relation("PlatformRoleUpdater", fields: [updatedBy], references: [id])
 
   @@map("platform_roles")
 }
@@ -101,49 +125,43 @@ model PlatformPermission {
   name      String   @unique @db.VarChar(100)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
-  createdBy String?  @map("created_by") @db.Uuid
   updatedBy String?  @map("updated_by") @db.Uuid
+  createdBy String?  @map("created_by") @db.Uuid
 
-  rolePermissions PlatformRolePermission[]
   creator         User?                    @relation("PlatformPermissionCreator", fields: [createdBy], references: [id])
   updater         User?                    @relation("PlatformPermissionUpdater", fields: [updatedBy], references: [id])
+  rolePermissions PlatformRolePermission[]
 
   @@map("platform_permissions")
 }
 
 model PlatformRolePermission {
   id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  roleId       String   @map("platform_role_id") @db.Uuid
-  permissionId String   @map("platform_permission_id") @db.Uuid
-  createdBy    String?  @map("created_by") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  createdBy    String   @map("created_by") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @default(now()) @map("updated_at")
 
   role       PlatformRole       @relation(fields: [roleId], references: [id])
   permission PlatformPermission @relation(fields: [permissionId], references: [id])
-  creator    User?              @relation("PlatformRolePermissionCreator", fields: [createdBy], references: [id])
+  creator    User               @relation("PlatformRPCreator", fields: [createdBy], references: [id])
 
   @@unique([roleId, permissionId])
-  @@index([roleId])
-  @@index([permissionId])
   @@map("platform_role_permissions")
 }
 
 model PlatformUserRole {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId    String   @map("user_id") @db.Uuid
-  roleId    String   @map("platform_role_id") @db.Uuid
-  createdBy String?  @map("created_by") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  createdBy String   @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @default(now()) @map("updated_at")
 
   user    User         @relation(fields: [userId], references: [id])
   role    PlatformRole @relation(fields: [roleId], references: [id])
-  creator User?        @relation("PlatformUserRoleCreator", fields: [createdBy], references: [id])
+  creator User         @relation("PlatformUserRoleCreator", fields: [createdBy], references: [id])
 
   @@unique([userId, roleId])
-  @@index([userId])
-  @@index([roleId])
   @@map("platform_user_roles")
 }
 
@@ -152,97 +170,129 @@ model PlatformUserRole {
 // -----------------------------------------------------------------------------
 
 model Organisation {
-  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  referenceNumber String   @map("reference_number") @db.VarChar(50)
-  name            String   @db.VarChar(100)
-  email           String   @unique @db.VarChar(255)
-  // domain          String?
-  // redFlagPolicies Json?    @map("red_flag_policies")
-  status          Boolean  @default(true)
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  createdBy       String?  @map("created_by") @db.Uuid
-  updatedBy       String?  @map("updated_by") @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  referenceNumber String   @unique @map("reference_number") @db.VarChar(50)
+  name      String   @db.VarChar(100)
+  email     String   @unique @db.VarChar(255)
+  status    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  createdBy String?  @map("created_by") @db.Uuid
+  updatedBy String?  @map("updated_by") @db.Uuid
 
-  creator User? @relation("OrganisationCreator", fields: [createdBy], references: [id])
-  updater User? @relation("OrganisationUpdater", fields: [updatedBy], references: [id])
+  creator User? @relation("OrgCreator", fields: [createdBy], references: [id])
+  updater User? @relation("OrgUpdater", fields: [updatedBy], references: [id])
 
-  users                OrganisationUser[]
-  roles                OrganisationRole[]
-  organisationUserRole OrganisationUserRole[]
-  auditLogs            OrganisationAuditLog[]
+  roles       OrganisationRole[]
+  permissions OrganisationPermission[]
+  userRoles   OrganisationUserRole[]
+  auditLogs   OrganisationAuditLog[]
 
   @@map("organisations")
 }
 
 model OrganisationUser {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organisationId  String    @map("organisation_id") @db.Uuid
-  userId          String    @map("user_id") @db.Uuid
-  status          String    @default("Invited")
-  // invitationToken String?   @unique @map("invitation_token")
-  // tokenExpiry     DateTime? @map("token_expiry")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  lastLoginAt     DateTime? @map("last_login_at")
-  cognitoSub      String    @unique @map("cognito_sub")
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @unique @map("user_id") @db.Uuid
+  statusId    Int       @map("status_id")
+  cognitoSub  String    @unique @map("cognito_sub") @db.Uuid
+  lastLoginAt DateTime? @map("last_login_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
 
-  organisation Organisation @relation(fields: [organisationId], references: [id])
-  user         User         @relation(fields: [userId], references: [id])
+  user   User         @relation(fields: [userId], references: [id])
+  status EntityOption @relation("OrgUserStatus", fields: [statusId], references: [id])
 
-  @@unique([userId])
-  @@index([organisationId])
-  @@index([userId])
   @@map("organisation_users")
 }
 
 model OrganisationRole {
-  id             String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organisationId String @map("organisation_id") @db.Uuid
-  name           String @db.VarChar(50)
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String?  @map("organisation_id") @db.Uuid
+  name           String   @unique @db.VarChar(50)
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
-  created_by
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  organisation    Organisation?                @relation(fields: [organisationId], references: [id])
+  creator         User                         @relation("OrgRoleCreator", fields: [createdBy], references: [id])
+  updater         User?                        @relation("OrgRoleUpdater", fields: [updatedBy], references: [id])
+  rolePermissions OrganisationRolePermission[]
+  userRoles       OrganisationUserRole[]
 
-  organisation Organisation           @relation(fields: [organisationId], references: [id])
-  userRoles    OrganisationUserRole[]
-
-  @@index([organisationId]) //You’ll query roles by organisation.
   @@map("organisation_roles")
 }
 
+model OrganisationPermission {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String?  @map("organisation_id") @db.Uuid
+  name           String   @unique @db.VarChar(100)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedBy      String?  @map("updated_by") @db.Uuid
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  createdBy      String?  @map("created_by") @db.Uuid
+
+  organisation    Organisation?                @relation(fields: [organisationId], references: [id])
+  updater         User?                        @relation("OrgPermUpdater", fields: [updatedBy], references: [id])
+  creator         User?                        @relation("OrgPermCreator", fields: [createdBy], references: [id])
+  rolePermissions OrganisationRolePermission[]
+
+  @@map("organisation_permissions")
+}
+
+model OrganisationRolePermission {
+  id           String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  createdBy    String?  @map("created_by") @db.Uuid
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  role       OrganisationRole       @relation(fields: [roleId], references: [id])
+  permission OrganisationPermission @relation(fields: [permissionId], references: [id])
+  creator    User?                  @relation("OrgRPCreator", fields: [createdBy], references: [id])
+
+  @@unique([roleId, permissionId])
+  @@map("organisation_role_permissions")
+}
+
 model OrganisationUserRole {
-  id                 String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  organisationId     String @map("organisation_id") @db.Uuid
-  organisationRoleId String @map("organisation_role_id") @db.Uuid
-  userId             String @map("user_id") @db.Uuid
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  roleId         String   @map("role_id") @db.Uuid
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at")
 
-  user         User             @relation(fields: [userId], references: [id])
-  role         OrganisationRole @relation(fields: [organisationRoleId], references: [id])
   organisation Organisation     @relation(fields: [organisationId], references: [id])
+  user         User             @relation("OrgUserRoleOwner", fields: [userId], references: [id])
+  role         OrganisationRole @relation(fields: [roleId], references: [id])
+  creator      User             @relation("OrgUserRoleCreator", fields: [createdBy], references: [id])
 
-  @@unique([organisationId, userId, organisationRoleId])
-  @@index([organisationId])
-  @@index([userId])
-  @@index([organisationRoleId])
   @@map("organisation_user_roles")
 }
 
 model OrganisationAuditLog {
-  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id                   Int     @id @default(autoincrement())
   organisationId String?  @map("organisation_id") @db.Uuid
   userId         String   @map("user_id") @db.Uuid
-  actionType     String   @map("action_type")
-  sessionId      String?  @map("session_id")
-  oldValues      Json?    @map("old_values")
-  newValues      Json?    @map("new_values")
+  action         String   @db.VarChar(255)
+  details        String
   createdAt      DateTime @default(now()) @map("created_at")
 
   organisation Organisation? @relation(fields: [organisationId], references: [id])
   user         User          @relation(fields: [userId], references: [id])
 
-  @@index([organisationId])
-  @@index([userId])
   @@map("organisation_audit_logs")
+}
+
+model PlatformAuditLog {
+  id        Int      @id @default(autoincrement())
+  userId    String   @map("user_id") @db.Uuid
+  action    String   @db.VarChar(255)
+  details   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("platfrom_audit_logs") 
 }

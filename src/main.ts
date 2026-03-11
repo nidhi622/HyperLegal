@@ -25,7 +25,16 @@ async function bootstrap() {
       'API documentation for the Law Firm Onboarding & Risk Assessment Tool',
     )
     .setVersion('1.0')
-    .addBearerAuth() 
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        name: 'Authorization',
+        in: 'header',
+      },
+      'access-token', // security name
+    )
     .build();
 
   const document = SwaggerModule.createDocument(app, swaggerConfig);

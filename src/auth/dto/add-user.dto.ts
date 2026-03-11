@@ -1,15 +1,15 @@
 import { ApiProperty } from "@nestjs/swagger";
 import { IsBoolean, IsEmail, IsEnum, IsNotEmpty, IsString } from "class-validator";
-import { UserRole } from "generated/prisma/enums";
+// import { UserRole } from "generated/prisma/enums";
 // import { UserRole } from "prisma/client/client";
 // import { UserRole } from "prisma/client/enums";
 // import { UserRole } from "generated/prisma/enums";
 
 
-// export enum UserRole {
-//   STANDARD = 'standard',
-//   ADMIN = 'admin',
-// }
+export enum UserRole {
+  STANDARD = 'standard',
+  ADMIN = 'admin',
+}
 
 // enum UserRole {
 //   standard,
@@ -32,7 +32,7 @@ export class AddUserDto {
   @IsEmail()
   email: string;
 
-  @ApiProperty({ enum: UserRole, example: UserRole.standard })
+  @ApiProperty({ enum: UserRole})
   @IsEnum(UserRole)
   role: UserRole;
 

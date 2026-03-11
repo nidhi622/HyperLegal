@@ -12,13 +12,13 @@ import {
   SignUpCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { createHmac } from 'crypto';
-import { UserRole } from 'generated/prisma/enums';
+// import { UserRole } from 'generated/prisma/enums';
 
 export type CognitoCreateUserPayload = {
   email: string;
   firstName: string;
   lastName?: string | null;
-  role: UserRole;
+  // role: UserRole;
   sendInvite?: boolean;
 };
 
@@ -51,8 +51,8 @@ export class CognitoService {
 
   async login(email: string, password: string) {
     const command = new AdminInitiateAuthCommand({
-      UserPoolId: this.config.get<string>('COGNITO_USER_POOL_ID'),
-      ClientId: this.config.get<string>('COGNITO_CLIENT_ID'),
+      UserPoolId: this.config.get<string>('PLATFORM_USER_POOL_ID'),
+      ClientId: this.config.get<string>('PLATFORM_APP_CLIENT_ID'),
       AuthFlow: 'ADMIN_USER_PASSWORD_AUTH',
       AuthParameters: {
         USERNAME: email,
@@ -63,41 +63,41 @@ export class CognitoService {
     return this.client.send(command);
   }
 
-  async login1(email: string, pass: string) {
-    const command = new InitiateAuthCommand({
-      AuthFlow: 'USER_PASSWORD_AUTH',
-      // UserPoolId: this.config.get('COGNITO_USER_POOL_ID')!,
-      ClientId: this.config.get('COGNITO_CLIENT_ID')!,
-      AuthParameters: {
-        USERNAME: email,
-        PASSWORD: pass,
-        SECRET_HASH: this.calculateSecretHash(email),
+  // async login1(email: string, pass: string) {
+  //   const command = new InitiateAuthCommand({
+  //     AuthFlow: 'USER_PASSWORD_AUTH',
+  //     // UserPoolId: this.config.get('COGNITO_USER_POOL_ID')!,
+  //     ClientId: this.config.get('COGNITO_CLIENT_ID')!,
+  //     AuthParameters: {
+  //       USERNAME: email,
+  //       PASSWORD: pass,
+  //       SECRET_HASH: this.calculateSecretHash(email),
 
-        // If your App Client has a secret, you must add SECRET_HASH here
-      },
-    });
+  //       // If your App Client has a secret, you must add SECRET_HASH here
+  //     },
+  //   });
 
-    try {
-      console.log('command::: ', command);
-      const response = await this.client.send(command);
+  //   try {
+  //     console.log('command::: ', command);
+  //     const response = await this.client.send(command);
 
-      console.log('response: ', response);
-      console.log(
-        'response.AuthenticationResult: ',
-        response.AuthenticationResult,
-      );
+  //     console.log('response: ', response);
+  //     console.log(
+  //       'response.AuthenticationResult: ',
+  //       response.AuthenticationResult,
+  //     );
 
-      return response;
-    } catch (error) {
-      console.log('error; ', error);
-      throw new UnauthorizedException('Authentication Failed');
-    }
-  }
+  //     return response;
+  //   } catch (error) {
+  //     console.log('error; ', error);
+  //     throw new UnauthorizedException('Authentication Failed');
+  //   }
+  // }
 
   async forgotPassword(email: string) {
     console.log('email: ', email);
     const command = new ForgotPasswordCommand({
-      ClientId: this.config.get<string>('COGNITO_CLIENT_ID'),
+      ClientId: this.config.get<string>('PLATFORM_APP_CLIENT_ID'),
       Username: email,
     });
 
@@ -106,7 +106,7 @@ export class CognitoService {
 
   async confirmPassword(email: string, code: string, newPassword: string) {
     const command = new ConfirmForgotPasswordCommand({
-      ClientId: this.config.get<string>('COGNITO_CLIENT_ID'),
+      ClientId: this.config.get<string>('PLATFORM_APP_CLIENT_ID'),
       Username: email,
       ConfirmationCode: code,
       Password: newPassword,
@@ -119,7 +119,7 @@ export class CognitoService {
     payload: CognitoCreateUserPayload,
   ): Promise<{ userSub: string | null }> {
     const email = payload.email.toLowerCase();
-    const userPoolId = this.config.get<string>('COGNITO_USER_POOL_ID');
+    const userPoolId = this.config.get<string>('PLATFORM_USER_POOL_ID');
 
     if (userPoolId) {
       const result = await this.client.send(
@@ -135,7 +135,7 @@ export class CognitoService {
             // { Name: 'email_verified', Value: 'true' },
             { Name: 'given_name', Value: payload.firstName },
             { Name: 'family_name', Value: payload.lastName ?? '' },
-            { Name: 'custom:role', Value: payload.role },
+            // { Name: 'custom:role', Value: payload.role },
           ],
         }),
       );
@@ -146,7 +146,7 @@ export class CognitoService {
       return { userSub };
     }
 
-    const clientId = this.config.get<string>('COGNITO_CLIENT_ID');
+    const clientId = this.config.get<string>('PLATFORM_APP_CLIENT_ID');
     if (!clientId) {
       return { userSub: null };
     }
@@ -155,9 +155,7 @@ export class CognitoService {
       new SignUpCommand({
         ClientId: clientId,
         Username: email,
-        Password:
-          this.config.get<string>('COGNITO_TEMP_PASSWORD') ??
-          'TempPassword#123',
+        Password: this.generateTempPassword() ?? 'TempPassword#123',
         SecretHash: this.calculateSecretHash(email),
         UserAttributes: [
           { Name: 'email', Value: email },
@@ -165,7 +163,7 @@ export class CognitoService {
             Name: 'name',
             Value: `${payload.firstName} ${payload.lastName ?? ''}`.trim(),
           },
-          { Name: 'custom:role', Value: payload.role },
+          // { Name: 'custom:role', Value: payload.role },
         ],
       }),
     );
@@ -174,7 +172,7 @@ export class CognitoService {
   }
 
   async deleteUser(email: string): Promise<void> {
-    const userPoolId = this.config.get<string>('COGNITO_USER_POOL_ID');
+    const userPoolId = this.config.get<string>('PLATFORM_USER_POOL_ID');
     if (!userPoolId) {
       return;
     }
@@ -188,7 +186,7 @@ export class CognitoService {
   }
 
   async setUserPassword(email: string, newPassword: string): Promise<void> {
-    const userPoolId = this.config.get<string>('COGNITO_USER_POOL_ID');
+    const userPoolId = this.config.get<string>('PLATFORM_USER_POOL_ID');
 
     console.log('userPoolId::', userPoolId);
     if (!userPoolId) {
@@ -211,11 +209,37 @@ export class CognitoService {
   }
 
   private calculateSecretHash(username: string): string {
-    const clientId = this.config.get('COGNITO_CLIENT_ID')!;
-    const clientSecret = this.config.get('COGNITO_CLIENT_SECRET')!;
-    console.log('clientSecret: ', clientSecret);
+    const clientId = this.config.get('PLATFORM_APP_CLIENT_ID')!;
+    const clientSecret = this.config.get('PLATFORM_APP_CLIENT_SECRET')!;
     return createHmac('sha256', clientSecret)
       .update(username + clientId)
       .digest('base64');
+  }
+
+  private generateTempPassword(length: number = 12): string {
+    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lower = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const special = '!@#$%^&*_-+=';
+
+    const all = upper + lower + numbers + special;
+
+    const getRandom = (str: string) =>
+      str[Math.floor(Math.random() * str.length)];
+
+    let password =
+      getRandom(upper) +
+      getRandom(lower) +
+      getRandom(numbers) +
+      getRandom(special);
+
+    for (let i = password.length; i < length; i++) {
+      password += getRandom(all);
+    }
+
+    return password
+      .split('')
+      .sort(() => 0.5 - Math.random())
+      .join('');
   }
 }

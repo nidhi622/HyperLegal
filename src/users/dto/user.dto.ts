@@ -1,5 +1,5 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { UserRole } from 'generated/prisma/enums';
+// import { UserRole } from 'generated/prisma/enums';
 import {
   IsBoolean,
   IsEmail,
@@ -24,16 +24,16 @@ export class CreateUserDto {
   @IsEmail()
   email: string;
 
-  @ApiProperty({
-    enum: UserRole,
-    example: UserRole.standard,
-    required: false,
-    default: UserRole.standard,
-  })
+  // @ApiProperty({
+  //   enum: UserRole,
+  //   example: UserRole.standard,
+  //   required: false,
+  //   default: UserRole.standard,
+  // })
 
-  @IsEnum(UserRole)
+  // @IsEnum(UserRole)
   @IsOptional()
-  role?: UserRole;
+  role?: any;
 
   @ApiProperty({ required: false, example: true, default: true })
   @IsOptional()

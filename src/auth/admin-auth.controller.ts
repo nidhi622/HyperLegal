@@ -13,6 +13,6 @@ export class AdminAuthController {
   @ApiResponse({ status: 200, description: 'Admin logged in successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized access' })
   async login(@Body() request: LoginDto) {
-    return this.authService.adminLogin(request.email, request.password);
+    // return this.authService.adminLogin(request.email, request.password);
   }
 }

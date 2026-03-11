@@ -19,13 +19,18 @@ import { PermissionsGuard } from 'src/common/guards/platform-admin.permission.gu
 import { OrganisationService } from './organisation.service';
 import { FindAllOrganisationsDto } from './dto/find-all-organisation.dto';
 import { successResponse } from 'src/utils/api-response';
-import { CreateOrganisationDto, CreateOrganisationUserDto, UpdateOrganisationUserDto } from './dto/add-organisation.dto';
+import {
+  CreateOrganisationDto,
+  // CreateOrganisationUserDto, UpdateOrganisationUserDto
+} from './dto/add-organisation.dto';
 import { UpdateOrganisationDto } from './dto/update-organisation.dto';
+import { GetOrganisationUserParamsDto } from './dto/get-organisation-user.dto';
+import { CreateOrganisationUserDto } from './dto/create-organisation-user.dto';
 
 @Controller('platform/admin/organisations')
 @ApiTags('Organisation')
 @ApiBearerAuth()
-@UseGuards(PlatformAdminGuard)
+@UseGuards(PlatformAdminGuard, PermissionsGuard)
 export class OrganisationController {
   constructor(private readonly organisationService: OrganisationService) {}
 
@@ -45,6 +50,7 @@ export class OrganisationController {
   }
 
   @ApiOperation({ summary: 'Retrieve a paginated list of organisations' })
+  @ApiBearerAuth('access-token')
   @Post('list')
   @SetMetadata('permission', 'organisation.view.list')
   async listOrganisations(@Body() queryDto: FindAllOrganisationsDto) {
@@ -57,6 +63,7 @@ export class OrganisationController {
   }
 
   @ApiOperation({ summary: 'Create a new organisation' })
+  @ApiBearerAuth('access-token')
   @Post()
   @SetMetadata('permission', 'organisation.create')
   async createOrganisation(
@@ -97,55 +104,81 @@ export class OrganisationController {
     );
   }
 
+  @Get('/:organisationId/users/:userId')
+  @SetMetadata('permission', 'organisation.user.view.details')
+  async getOrganisationUser(@Param() params: GetOrganisationUserParamsDto) {
+    const data = await this.organisationService.getOrganisationUser(params);
+
+    return successResponse(
+      'Organisation user details fetched successfully.',
+      data,
+    );
+  }
+
+
+  @Post('organisation/users')
+   @SetMetadata('permission', 'organisation.user.create')
+async createOrganisationUser(
+  @Body() dto: CreateOrganisationUserDto,
+ @Req() req: any,
+) {
+  await this.organisationService.createOrganisationUser(dto, req.user.dbId);
+
+  return successResponse(
+    'Organisation user created successfully.',
+    {},
+  );
+}
+
   @Delete(':id')
   remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.organisationService.deleteOrganisation(id);
   }
 
-  @Post(':organisationId/users')
-  addUser(
-    @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
-    @Body() payload: CreateOrganisationUserDto,
-  ) {
-    return this.organisationService.addOrganisationUser(
-      organisationId,
-      payload,
-    );
-  }
+  // @Post(':organisationId/users')
+  // addUser(
+  //   @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
+  //   @Body() payload: CreateOrganisationUserDto,
+  // ) {
+  //   return this.organisationService.addOrganisationUser(
+  //     organisationId,
+  //     payload,
+  //   );
+  // }
 
-  @Get(':organisationId/users')
-  getUsers(
-    @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
-  ) {
-    return this.organisationService.getOrganisationUsers(organisationId);
-  }
+  // @Get(':organisationId/users')
+  // getUsers(
+  //   @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
+  // ) {
+  //   return this.organisationService.getOrganisationUsers(organisationId);
+  // }
 
-  @Get(':organisationId/users/:id')
-  getUserById(
-    @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ) {
-    return this.organisationService.getOrganisationUserById(organisationId, id);
-  }
+  // @Get(':organisationId/users/:id')
+  // getUserById(
+  //   @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
+  //   @Param('id', new ParseUUIDPipe()) id: string,
+  // ) {
+  //   return this.organisationService.getOrganisationUserById(organisationId, id);
+  // }
 
-  @Patch(':organisationId/users/:id')
-  updateUser(
-    @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
-    @Param('id', new ParseUUIDPipe()) id: string,
-    @Body() payload: UpdateOrganisationUserDto,
-  ) {
-    return this.organisationService.updateOrganisationUser(
-      organisationId,
-      id,
-      payload,
-    );
-  }
+  // @Patch(':organisationId/users/:id')
+  // updateUser(
+  //   @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
+  //   @Param('id', new ParseUUIDPipe()) id: string,
+  //   @Body() payload: UpdateOrganisationUserDto,
+  // ) {
+  //   return this.organisationService.updateOrganisationUser(
+  //     organisationId,
+  //     id,
+  //     payload,
+  //   );
+  // }
 
-  @Delete(':organisationId/users/:id')
-  deleteUser(
-    @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
-    @Param('id', new ParseUUIDPipe()) id: string,
-  ) {
-    return this.organisationService.deleteOrganisationUser(organisationId, id);
-  }
+  // @Delete(':organisationId/users/:id')
+  // deleteUser(
+  //   @Param('organisationId', new ParseUUIDPipe()) organisationId: string,
+  //   @Param('id', new ParseUUIDPipe()) id: string,
+  // ) {
+  //   return this.organisationService.deleteOrganisationUser(organisationId, id);
+  // }
 }

@@ -40,6 +40,7 @@ export class AuthService {
     const user = await this.prisma.user.findUnique({
       where: { email },
       include: {
+        platformUser: true,
         platformUserRoles: {
           include: {
             role: {
@@ -53,6 +54,19 @@ export class AuthService {
         },
       },
     });
+    if (user && !user.platformUser) {
+      throw new UnauthorizedException({
+        code: API_ERROR_CODES.INVALID_CREDENTIALS,
+        message: 'User not registered as platform user',
+      });
+    }
+
+    if (user && user.platformUser && user.platformUser.statusId !== 1) {
+      throw new UnauthorizedException({
+        code: API_ERROR_CODES.USER_INACTIVE,
+        message: 'User account is inactive',
+      });
+    }
 
     if (!user) {
       throw new UnauthorizedException({
@@ -95,77 +109,77 @@ export class AuthService {
     });
   }
 
-  async adminLogin(email: string, password: string) {
-    const normalizedEmail = email.trim().toLowerCase();
+  // async adminLogin(email: string, password: string) {
+  //   const normalizedEmail = email.trim().toLowerCase();
 
-    const adminUser = await this.prisma.user.findUnique({
-      where: { email: normalizedEmail },
-      select: {
-        id: true,
-        platformUsers: {
-          where: { status: true },
-          select: { id: true },
-          take: 1,
-        },
-        platformUserRoles: {
-          where: { role: { name: 'admin' } },
-          select: { id: true },
-          take: 1,
-        },
-      },
-    });
+  //   const adminUser = await this.prisma.user.findUnique({
+  //     where: { email: normalizedEmail },
+  //     select: {
+  //       id: true,
+  //       platformUsers: {
+  //         where: { status: true },
+  //         select: { id: true },
+  //         take: 1,
+  //       },
+  //       platformUserRoles: {
+  //         where: { role: { name: 'admin' } },
+  //         select: { id: true },
+  //         take: 1,
+  //       },
+  //     },
+  //   });
 
-    if (
-      !adminUser ||
-      adminUser.platformUsers.length === 0 ||
-      adminUser.platformUserRoles.length === 0
-    ) {
-      throw new UnauthorizedException('Unauthorized access.');
-    }
+  //   if (
+  //     !adminUser ||
+  //     adminUser.platformUsers.length === 0 ||
+  //     adminUser.platformUserRoles.length === 0
+  //   ) {
+  //     throw new UnauthorizedException('Unauthorized access.');
+  //   }
 
-    const command = new InitiateAuthCommand({
-      AuthFlow: 'USER_PASSWORD_AUTH',
-      ClientId: this.config.get('COGNITO_CLIENT_ID')!,
-      AuthParameters: {
-        USERNAME: normalizedEmail,
-        PASSWORD: password,
-        SECRET_HASH: this.calculateSecretHash(normalizedEmail),
-      },
-    });
+  //   const command = new InitiateAuthCommand({
+  //     AuthFlow: 'USER_PASSWORD_AUTH',
+  //     ClientId: this.config.get('COGNITO_CLIENT_ID')!,
+  //     AuthParameters: {
+  //       USERNAME: normalizedEmail,
+  //       PASSWORD: password,
+  //       SECRET_HASH: this.calculateSecretHash(normalizedEmail),
+  //     },
+  //   });
 
-    try {
-      const response = await this.client.send(command);
-      const authResult = response.AuthenticationResult;
+  //   try {
+  //     const response = await this.client.send(command);
+  //     const authResult = response.AuthenticationResult;
 
-      if (!authResult?.AccessToken) {
-        throw new UnauthorizedException('Invalid email or password.');
-      }
+  //     if (!authResult?.AccessToken) {
+  //       throw new UnauthorizedException('Invalid email or password.');
+  //     }
 
-      await this.prisma.platformUser.update({
-        where: { id: adminUser.platformUsers[0].id },
-        data: { lastLoginAt: new Date(), updatedAt: new Date() },
-      });
+  //     await this.prisma.platformUser.update({
+  //       where: { id: adminUser.platformUsers[0].id },
+  //       data: { lastLoginAt: new Date(), updatedAt: new Date() },
+  //     });
 
-      return successResponse('Admin login successful.', {
-        accessToken: authResult.AccessToken,
-        refreshToken: authResult.RefreshToken,
-        idToken: authResult.IdToken,
-        expiresIn: authResult.ExpiresIn,
-        tokenType: authResult.TokenType,
-      });
-    } catch (error: any) {
-      if (
-        error instanceof UnauthorizedException ||
-        ['NotAuthorizedException', 'UserNotFoundException'].includes(
-          error?.name,
-        )
-      ) {
-        throw new UnauthorizedException('Invalid email or password.');
-      }
+  //     return successResponse('Admin login successful.', {
+  //       accessToken: authResult.AccessToken,
+  //       refreshToken: authResult.RefreshToken,
+  //       idToken: authResult.IdToken,
+  //       expiresIn: authResult.ExpiresIn,
+  //       tokenType: authResult.TokenType,
+  //     });
+  //   } catch (error: any) {
+  //     if (
+  //       error instanceof UnauthorizedException ||
+  //       ['NotAuthorizedException', 'UserNotFoundException'].includes(
+  //         error?.name,
+  //       )
+  //     ) {
+  //       throw new UnauthorizedException('Invalid email or password.');
+  //     }
 
-      throw new InternalServerErrorException('Admin login failed.');
-    }
-  }
+  //     throw new InternalServerErrorException('Admin login failed.');
+  //   }
+  // }
 
   async forgotPasswordd(email: string) {
     const user = await this.prisma.user.findUnique({
@@ -239,8 +253,8 @@ export class AuthService {
 
     await this.dynamoRempo.saveToken(user.id, token, 3600);
 
-   const resetLink = `${this.config.get('BACKEND_URL')}/reset-password?token=${token}`;
-   console.log('resetLink::', resetLink);
+    const resetLink = `${this.config.get('BACKEND_URL')}/reset-password?token=${token}`;
+    console.log('resetLink::', resetLink);
 
     const res = await this.sesService.sendResetPasswordEmail(email, resetLink);
 

@@ -1,4 +1,8 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { API_ERROR_CODES } from 'src/common/constants/error-codes';
 import { CognitoService } from 'src/cognito/cognito.service';
 import { PrismaService } from 'src/database/prisma.service';
@@ -10,18 +14,21 @@ import {
 import { CreateOrganisationDto } from './dto/add-organisation.dto';
 import { FindAllOrganisationsDto } from './dto/find-all-organisation.dto';
 import { UpdateOrganisationDto } from './dto/update-organisation.dto';
+import { GetOrganisationUserParamsDto } from './dto/get-organisation-user.dto';
+import { SesService } from 'src/aws/ses.service';
+import { CreateOrganisationUserDto } from './dto/create-organisation-user.dto';
 
 @Injectable()
 export class OrganisationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cognitoService: CognitoService,
+    private readonly sesService: SesService,
   ) {}
 
   async createOrganisation(
     payload: CreateOrganisationDto,
     actor?: { userId?: string },
-    sessionId?: string,
   ): Promise<ApiResponse> {
     const email = payload.email.toLowerCase();
 
@@ -53,7 +60,7 @@ export class OrganisationService {
           referenceNumber,
           // domain: payload.domain,
           // redFlagPolicies: payload.redFlagPolicies as any,
-          status: payload.status ?? true,
+          // status: payload.status ?? true,
           createdBy: actorUserId,
           updatedBy: actorUserId,
         },
@@ -63,9 +70,8 @@ export class OrganisationService {
         data: {
           organisationId: created.id,
           userId: actorUserId,
-          actionType: 'ADDED_ORGNAISATION',
-          sessionId: sessionId ? String(sessionId) : null,
-          newValues: created as any,
+          action: 'ADDED_ORGNAISATION',
+          details: created as any,
         },
       });
 
@@ -107,12 +113,8 @@ export class OrganisationService {
         data: {
           organisationId: newOrg.id,
           userId: userId,
-          actionType: 'ADDED_ORGANISATION',
-          newValues: {
-            name: newOrg.name,
-            email: newOrg.email,
-            status: true,
-          },
+          action: 'ADDED_ORGANISATION',
+          details: `${JSON.stringify(newOrg)}`,
           // If your schema has sessionId, remember to pass it here from req if available
         },
       });
@@ -244,17 +246,12 @@ export class OrganisationService {
         data: {
           organisationId: id,
           userId: adminId,
-          actionType: 'ORGANISATION_UPDATED',
-          oldValues: {
-            name: currentOrg.name,
-            email: currentOrg.email,
-            status: currentOrg.status,
-          },
-          newValues: {
-            name: dto.name,
-            email: dto.email,
-            status: dto.status,
-          },
+          action: 'ORGANISATION_UPDATED',
+          details: `{
+            name: ${currentOrg.name},
+            email: ${currentOrg.email},
+            status: ${currentOrg.status},
+          }`,
         },
       });
 
@@ -338,7 +335,7 @@ export class OrganisationService {
       where: { id },
       data: {
         ...payload,
-        redFlagPolicies: payload.redFlagPolicies as any,
+        // redFlagPolicies: payload.redFlagPolicies as any,
       },
     });
 
@@ -346,6 +343,159 @@ export class OrganisationService {
       'Organization updated successfully.',
       updatedOrganisation,
     );
+  }
+
+  async getOrganisationUser(params: GetOrganisationUserParamsDto) {
+    const { organisationId, userId } = params;
+
+    // 1️⃣ Organisation exists?
+    const organisation = await this.prisma.organisation.findUnique({
+      where: { id: organisationId },
+    });
+
+    if (!organisation) {
+      throw new NotFoundException([
+        { organisationId: 'Organisation not found' },
+      ]);
+    }
+
+    // 2️⃣ Organisation User exists?
+    const orgUserRole = await this.prisma.organisationUserRole.findFirst({
+      where: {
+        organisationId,
+        userId,
+      },
+      include: {
+        user: true,
+        role: true,
+        organisation: true,
+      },
+    });
+
+    if (!orgUserRole) {
+      throw new NotFoundException([
+        { userId: 'User does not belong to this organisation' },
+      ]);
+    }
+
+    // 3️⃣ Get user status
+    const orgUser = await this.prisma.organisationUser.findUnique({
+      where: { userId },
+      include: {
+        status: true,
+      },
+    });
+
+    const creator = await this.prisma.user.findUnique({
+      where: { id: orgUserRole.createdBy },
+    });
+
+    return {
+      id: orgUserRole.user.id,
+      organisation: {
+        id: organisation.id,
+        name: organisation.name,
+      },
+      firstName: orgUserRole.user.firstName,
+      lastName: orgUserRole.user.lastName,
+      email: orgUserRole.user.email,
+      status: {
+        id: orgUser?.status.id,
+        name: orgUser?.status.name,
+      },
+      createdBy: `${creator?.firstName} ${creator?.lastName}`,
+      createdAt: orgUserRole.createdAt,
+      updatedBy: `${creator?.firstName} ${creator?.lastName}`,
+      updatedAt: orgUserRole.createdAt,
+    };
+  }
+
+  async createOrganisationUser(
+    dto: CreateOrganisationUserDto,
+    adminId: string,
+  ) {
+    const { email, firstName, lastName, organisationId } = dto;
+
+    // 1️⃣ Email Exists?
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException([{ email: 'Email already exists' }]);
+    }
+
+    // 2️⃣ Organisation Exists?
+    const organisation = await this.prisma.organisation.findUnique({
+      where: { id: organisationId },
+    });
+
+    if (!organisation) {
+      throw new NotFoundException([
+        { organisationId: 'Organisation not found' },
+      ]);
+    }
+
+    // 3️⃣ Generate Temp Password
+    // const tempPassword = this.authService.generateTempPassword();
+
+    // 4️⃣ Create Cognito User
+    const cognitoUser = await this.cognitoService.createUser(
+      {
+        email,
+        firstName,
+        lastName,
+        sendInvite: true,
+      },
+      // tempPassword,
+    );
+
+    // 5️⃣ DB Transaction
+    await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          firstName,
+          lastName,
+          email,
+          createdBy: adminId,
+        },
+      });
+
+      await tx.organisationUser.create({
+        data: {
+          userId: user.id,
+          cognitoSub: cognitoUser.sub,
+          statusId: 2, // invited
+        },
+      });
+
+      // Admin Role
+      const role = await tx.organisationRole.findFirst({
+        where: { name: 'CompanyAdmin' },
+      });
+
+      await tx.organisationUserRole.create({
+        data: {
+          organisationId,
+          userId: user.id,
+          roleId: role.id,
+          createdBy: adminId,
+        },
+      });
+
+      // Audit Log
+      await tx.organisationAuditLog.create({
+        data: {
+          organisationId,
+          userId: adminId,
+          action: 'ORG Admin Created',
+          details: `Admin created for ${email}`,
+        },
+      });
+    });
+
+    // 6️⃣ Send Email
+    await this.sesService.sendOrganisationInvite(email, tempPassword);
   }
 
   async deleteOrganisation(id: string): Promise<ApiResponse> {
@@ -365,147 +515,147 @@ export class OrganisationService {
     return successResponse('Organization deleted successfully.', {});
   }
 
-  async addOrganisationUser(
-    organisationId: string,
-    payload: CreateOrganisationUserDto,
-  ): Promise<ApiResponse> {
-    const organisation = await this.prisma.organisation.findUnique({
-      where: { id: organisationId },
-    });
+  // async addOrganisationUser(
+  //   organisationId: string,
+  //   payload: CreateOrganisationUserDto,
+  // ): Promise<ApiResponse> {
+  //   const organisation = await this.prisma.organisation.findUnique({
+  //     where: { id: organisationId },
+  //   });
 
-    if (!organisation) {
-      return errorResponse(
-        API_ERROR_CODES.NOT_FOUND,
-        'Organization not found.',
-      );
-    }
+  //   if (!organisation) {
+  //     return errorResponse(
+  //       API_ERROR_CODES.NOT_FOUND,
+  //       'Organization not found.',
+  //     );
+  //   }
 
-    const email = payload.email.toLowerCase();
-    // const existingUser = await this.prisma.organisationUser.findUnique({ where: { email } });
+  //   const email = payload.email.toLowerCase();
+  //   // const existingUser = await this.prisma.organisationUser.findUnique({ where: { email } });
 
-    // if (existingUser) {
-    //   return errorResponse(API_ERROR_CODES.CONFLICT, 'Organization user email already exists.');
-    // }
+  //   // if (existingUser) {
+  //   //   return errorResponse(API_ERROR_CODES.CONFLICT, 'Organization user email already exists.');
+  //   // }
 
-    const cognitoResult = await this.cognitoService.createUser({
-      email,
-      firstName: payload.firstName,
-      lastName: payload.lastName,
-      role: payload.role,
-      sendInvite: payload.sendInvite,
-    });
+  //   const cognitoResult = await this.cognitoService.createUser({
+  //     email,
+  //     firstName: payload.firstName,
+  //     lastName: payload.lastName,
+  //     role: payload.role,
+  //     sendInvite: payload.sendInvite,
+  //   });
 
-    // const organisationUser = await this.prisma.organisationUsers.create({
-    //   data: {
-    //     organisationId,
-    //     firstName: payload.firstName,
-    //     lastName: payload.lastName ?? '',
-    //     email,
-    //     role: payload.role,
-    //     status: payload.status ?? true,
-    //     cognitoSub: cognitoResult.userSub,
-    //   },
-    // });
+  //   // const organisationUser = await this.prisma.organisationUsers.create({
+  //   //   data: {
+  //   //     organisationId,
+  //   //     firstName: payload.firstName,
+  //   //     lastName: payload.lastName ?? '',
+  //   //     email,
+  //   //     role: payload.role,
+  //   //     status: payload.status ?? true,
+  //   //     cognitoSub: cognitoResult.userSub,
+  //   //   },
+  //   // });
 
-    return successResponse('Organization user created successfully.', {});
-  }
+  //   return successResponse('Organization user created successfully.', {});
+  // }
 
-  async getOrganisationUsers(organisationId: string): Promise<ApiResponse> {
-    const organisation = await this.prisma.organisation.findUnique({
-      where: { id: organisationId },
-    });
+  // async getOrganisationUsers(organisationId: string): Promise<ApiResponse> {
+  //   const organisation = await this.prisma.organisation.findUnique({
+  //     where: { id: organisationId },
+  //   });
 
-    if (!organisation) {
-      return errorResponse(
-        API_ERROR_CODES.NOT_FOUND,
-        'Organization not found.',
-      );
-    }
+  //   if (!organisation) {
+  //     return errorResponse(
+  //       API_ERROR_CODES.NOT_FOUND,
+  //       'Organization not found.',
+  //     );
+  //   }
 
-    const users = await this.prisma.organisationUser.findMany({
-      where: { organisationId },
-      orderBy: { createdAt: 'desc' },
-    });
+  //   const users = await this.prisma.organisationUser.findMany({
+  //     where: { organisationId },
+  //     orderBy: { createdAt: 'desc' },
+  //   });
 
-    return successResponse('Organization users retrieved successfully.', users);
-  }
+  //   return successResponse('Organization users retrieved successfully.', users);
+  // }
 
-  async getOrganisationUserById(
-    organisationId: string,
-    id: string,
-  ): Promise<ApiResponse> {
-    const user = await this.prisma.organisationUser.findFirst({
-      where: { id, organisationId },
-    });
+  // async getOrganisationUserById(
+  //   organisationId: string,
+  //   id: string,
+  // ): Promise<ApiResponse> {
+  //   const user = await this.prisma.organisationUser.findFirst({
+  //     where: { id, organisationId },
+  //   });
 
-    if (!user) {
-      return errorResponse(
-        API_ERROR_CODES.NOT_FOUND,
-        'Organization user not found.',
-      );
-    }
+  //   if (!user) {
+  //     return errorResponse(
+  //       API_ERROR_CODES.NOT_FOUND,
+  //       'Organization user not found.',
+  //     );
+  //   }
 
-    return successResponse('Organization user retrieved successfully.', user);
-  }
+  //   return successResponse('Organization user retrieved successfully.', user);
+  // }
 
-  async updateOrganisationUser(
-    organisationId: string,
-    id: string,
-    payload: UpdateOrganisationUserDto,
-  ): Promise<ApiResponse> {
-    const user = await this.prisma.organisationUser.findFirst({
-      where: { id, organisationId },
-    });
+  // async updateOrganisationUser(
+  //   organisationId: string,
+  //   id: string,
+  //   payload: UpdateOrganisationUserDto,
+  // ): Promise<ApiResponse> {
+  //   const user = await this.prisma.organisationUser.findFirst({
+  //     where: { id, organisationId },
+  //   });
 
-    if (!user) {
-      return errorResponse(
-        API_ERROR_CODES.NOT_FOUND,
-        'Organization user not found.',
-      );
-    }
+  //   if (!user) {
+  //     return errorResponse(
+  //       API_ERROR_CODES.NOT_FOUND,
+  //       'Organization user not found.',
+  //     );
+  //   }
 
-    if (payload.email) {
-      const email = payload.email.toLowerCase();
-      // const existingUser = await this.prisma.organisationUser.findUnique({ where: { email } });
+  //   if (payload.email) {
+  //     const email = payload.email.toLowerCase();
+  //     // const existingUser = await this.prisma.organisationUser.findUnique({ where: { email } });
 
-      // if (existingUser && existingUser.id !== id) {
-      //   return errorResponse(API_ERROR_CODES.CONFLICT, 'Organization user email already exists.');
-      // }
+  //     // if (existingUser && existingUser.id !== id) {
+  //     //   return errorResponse(API_ERROR_CODES.CONFLICT, 'Organization user email already exists.');
+  //     // }
 
-      payload.email = email;
-    }
+  //     payload.email = email;
+  //   }
 
-    // const updatedUser = await this.prisma.organisationUser.update({
-    //   where: { id },
-    //   data: payload,
-    // });
+  //   // const updatedUser = await this.prisma.organisationUser.update({
+  //   //   where: { id },
+  //   //   data: payload,
+  //   // });
 
-    return successResponse('Organization user updated successfully.', {});
-  }
+  //   return successResponse('Organization user updated successfully.', {});
+  // }
 
-  async deleteOrganisationUser(
-    organisationId: string,
-    id: string,
-  ): Promise<ApiResponse> {
-    const user = await this.prisma.organisationUser.findFirst({
-      where: { id, organisationId },
-    });
+  // async deleteOrganisationUser(
+  //   organisationId: string,
+  //   id: string,
+  // ): Promise<ApiResponse> {
+  //   const user = await this.prisma.organisationUser.findFirst({
+  //     where: { id, organisationId },
+  //   });
 
-    if (!user) {
-      return errorResponse(
-        API_ERROR_CODES.NOT_FOUND,
-        'Organization user not found.',
-      );
-    }
+  //   if (!user) {
+  //     return errorResponse(
+  //       API_ERROR_CODES.NOT_FOUND,
+  //       'Organization user not found.',
+  //     );
+  //   }
 
-    await this.prisma.organisationUser.delete({ where: { id } });
+  //   await this.prisma.organisationUser.delete({ where: { id } });
 
-    try {
-      // await this.cognitoService.deleteUser(user.email);
-    } catch {
-      // Keep DB as source-of-truth in case Cognito account is absent.
-    }
+  //   try {
+  //     // await this.cognitoService.deleteUser(user.email);
+  //   } catch {
+  //     // Keep DB as source-of-truth in case Cognito account is absent.
+  //   }
 
-    return successResponse('Organization user deleted successfully.', {});
-  }
+  //   return successResponse('Organization user deleted successfully.', {});
+  // }
 }

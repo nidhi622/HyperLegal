@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { UserRole } from 'generated/prisma/enums';
+// import { UserRole } from 'generated/prisma/enums';
 import { API_ERROR_CODES } from 'src/common/constants/error-codes';
 import { CognitoService } from 'src/cognito/cognito.service';
 import { PrismaService } from 'src/database/prisma.service';
@@ -20,7 +20,7 @@ export class UsersService {
 
   async create(payload: CreateUserDto): Promise<ApiResponse> {
     const email = payload.email.toLowerCase();
-    const roleToAssign = payload.role ?? UserRole.standard;
+    const roleToAssign = payload.role;
 
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
@@ -52,7 +52,7 @@ export class UsersService {
       email,
       firstName: payload.firstName,
       lastName: payload.lastName ?? null,
-      role: roleToAssign,
+      // role: roleToAssign,
       sendInvite: payload.sendInvite,
     });
 
@@ -111,7 +111,7 @@ export class UsersService {
           lastName: pu.user.lastName,
           email: pu.user.email,
           cognitoSub: pu.cognitoSub,
-          status: pu.status,
+          // status: pu.status,
           createdAt: pu.createdAt,
           updatedAt: pu.updatedAt,
           roles: userRoles.map((ur) => ur.role.name),
@@ -176,14 +176,14 @@ export class UsersService {
     });
 
     // Update platform user status if provided
-    if (payload.status !== undefined) {
-      await this.prisma.platformUser.update({
-        where: { id },
-        data: {
-          status: payload.status,
-        },
-      });
-    }
+    // if (payload.status !== undefined) {
+    //   await this.prisma.platformUser.update({
+    //     where: { id },
+    //     data: {
+    //       status: payload.status,
+    //     },
+    //   });
+    // }
 
     if (payload.role) {
       await this.assignRoleToUser(id, payload.role);
@@ -239,13 +239,13 @@ export class UsersService {
     });
 
     // Create new role
-    await this.prisma.platformUserRole.create({
-      data: {
-        id: randomUUID(),
-        userId: platformUserId,
-        roleId: roleId,
-      },
-    });
+    // await this.prisma.platformUserRole.create({
+    //   data: {
+    //     id: randomUUID(),
+    //     userId: platformUserId,
+    //     roleId: roleId,
+    //   },
+    // });
   }
 
   private async getUserById(id: string): Promise<UserView | null> {
@@ -286,7 +286,7 @@ export class UsersService {
       lastName: platformUser.user.lastName,
       email: platformUser.user.email,
       cognitoSub: platformUser.cognitoSub,
-      status: platformUser.status,
+      status: true,
       createdAt: platformUser.createdAt,
       updatedAt: platformUser.updatedAt,
       roles: userRoles.map((ur) => ur.role.name),
