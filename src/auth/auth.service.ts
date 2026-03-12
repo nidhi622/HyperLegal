@@ -61,7 +61,7 @@ export class AuthService {
       });
     }
 
-    if (user && user.platformUser && user.platformUser.statusId !== 1) {
+    if (user && user.platformUser && user.platformUser.status !== 1) {
       throw new UnauthorizedException({
         code: API_ERROR_CODES.USER_INACTIVE,
         message: 'User account is inactive',
@@ -393,5 +393,32 @@ export class AuthService {
     }
 
     return errors;
+  }
+
+    generateTempPassword(length: number = 12): string {
+    const upper = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lower = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const special = '!@#$%^&*_-+=';
+
+    const all = upper + lower + numbers + special;
+
+    const getRandom = (str: string) =>
+      str[Math.floor(Math.random() * str.length)];
+
+    let password =
+      getRandom(upper) +
+      getRandom(lower) +
+      getRandom(numbers) +
+      getRandom(special);
+
+    for (let i = password.length; i < length; i++) {
+      password += getRandom(all);
+    }
+
+    return password
+      .split('')
+      .sort(() => 0.5 - Math.random())
+      .join('');
   }
 }

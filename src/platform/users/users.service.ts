@@ -48,20 +48,18 @@ export class UsersService {
       },
     });
 
-    const cognitoResult = await this.cognitoService.createUser({
+    const cognitoResult = await this.cognitoService.createPlatformUser({
       email,
       firstName: payload.firstName,
       lastName: payload.lastName ?? null,
+      password: '123@123',
       // role: roleToAssign,
       sendInvite: payload.sendInvite,
     });
 
     if (!cognitoResult.userSub) {
       await this.prisma.user.delete({ where: { id: user.id } });
-      return errorResponse(
-        API_ERROR_CODES.INTERNAL,
-        'User creation failed.',
-      );
+      return errorResponse(API_ERROR_CODES.INTERNAL, 'User creation failed.');
     }
 
     return successResponse('User created successfully.', {
@@ -126,10 +124,7 @@ export class UsersService {
     const user = await this.getUserById(id);
 
     if (!user) {
-      return errorResponse(
-        API_ERROR_CODES.NOT_FOUND,
-        'User not found.',
-      );
+      return errorResponse(API_ERROR_CODES.NOT_FOUND, 'User not found.');
     }
 
     return successResponse('User retrieved successfully.', user);
@@ -139,10 +134,7 @@ export class UsersService {
     const user = await this.getUserById(id);
 
     if (!user) {
-      return errorResponse(
-        API_ERROR_CODES.NOT_FOUND,
-        'User not found.',
-      );
+      return errorResponse(API_ERROR_CODES.NOT_FOUND, 'User not found.');
     }
 
     if (payload.email) {
@@ -197,10 +189,7 @@ export class UsersService {
     const user = await this.getUserById(id);
 
     if (!user) {
-      return errorResponse(
-        API_ERROR_CODES.NOT_FOUND,
-        'User not found.',
-      );
+      return errorResponse(API_ERROR_CODES.NOT_FOUND, 'User not found.');
     }
 
     // Delete platform user roles first
@@ -222,7 +211,10 @@ export class UsersService {
     return successResponse('User deleted successfully.', {});
   }
 
-  private async assignRoleToUser(platformUserId: string, roleName: string): Promise<void> {
+  private async assignRoleToUser(
+    platformUserId: string,
+    roleName: string,
+  ): Promise<void> {
     const role = await this.prisma.platformRole.findUnique({
       where: { name: roleName },
       select: { id: true },
@@ -296,13 +288,13 @@ export class UsersService {
   async findUserByEmail(email: string): Promise<ApiResponse> {
     const user = await this.prisma.user.findUnique({
       where: { email },
-      
+
       select: {
         id: true,
         firstName: true,
         lastName: true,
         email: true,
-      }
+      },
     });
 
     return successResponse('User found.', user);

@@ -18,7 +18,7 @@ export class AuthPrecheckGuard implements CanActivate {
       where: { email },
       include: {
         platformUser: true,
-        organisationUsers: true,
+        // organisationUsers: true,
       },
     });
 
@@ -27,13 +27,13 @@ export class AuthPrecheckGuard implements CanActivate {
     }
 
     const isPlatformActive =
-      user.platformUser && user.platformUser.statusId === 1;
+      user.platformUser && user.platformUser.status === 1;
 
-    const isOrganisationActive = user.organisationUsers.some(
-      (u) => u.statusId === 2,
-    );
+    // const isOrganisationActive = user.organisationUsers.some(
+    //   (u) => u.statusId === 2,
+    // );
 
-    if (!isPlatformActive && !isOrganisationActive) {
+    if (!isPlatformActive) {
       throw new UnauthorizedException('User account inactive');
     }
 

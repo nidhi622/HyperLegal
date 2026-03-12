@@ -11,7 +11,7 @@ import { ConfirmNewPasswordDto } from './dto/confirm-new-user.dto';
 import { AuthPrecheckGuard } from 'src/common/guards/auth-precheck-active-user-guard';
 
 @Controller(['auth', 'platform/auth/login'])
-export class AuthController {
+export class PlatformAdminAuthController {
   constructor(private authService: AuthService) {}
 
   

@@ -39,37 +39,37 @@ async function main() {
   /* ------------------------------------------------ */
   console.log('📦 Step 2: Seeding Lookup Entities');
 
-  const platformStatus = await prisma.entity.upsert({
-    where: { id: 1 },
-    update: {},
-    create: {
-      id: 1,
-      key: 'PLATFORM_USER_STATUS',
-      name: 'Platform User Status',
-      options: {
-        create: [{ id: 1, name: 'Active' }],
-      },
-    },
-  });
+  // const platformStatus = await prisma.entity.upsert({
+  //   where: { id: 1 },
+  //   update: {},
+  //   create: {
+  //     id: 1,
+  //     key: 'PLATFORM_USER_STATUS',
+  //     name: 'Platform User Status',
+  //     options: {
+  //       create: [{ id: 1, name: 'Active' }],
+  //     },
+  //   },
+  // });
 
   console.log('✅ Platform User Status seeded');
 
-  const orgStatus = await prisma.entity.upsert({
-    where: { id: 2 },
-    update: {},
-    create: {
-      id: 2,
-      key: 'ORGANISATION_USER_STATUS',
-      name: 'Organisation User Status',
-      options: {
-        create: [
-          { id: 2, name: 'Invited' },
-          { id: 3, name: 'Active' },
-          { id: 4, name: 'Suspended' },
-        ],
-      },
-    },
-  });
+  // const orgStatus = await prisma.entity.upsert({
+  //   where: { id: 2 },
+  //   update: {},
+  //   create: {
+  //     id: 2,
+  //     key: 'ORGANISATION_USER_STATUS',
+  //     name: 'Organisation User Status',
+  //     options: {
+  //       create: [
+  //         { id: 2, name: 'Invited' },
+  //         { id: 3, name: 'Active' },
+  //         { id: 4, name: 'Suspended' },
+  //       ],
+  //     },
+  //   },
+  // });
 
   console.log('✅ Organisation User Status seeded');
 
@@ -142,7 +142,7 @@ async function main() {
     create: {
       userId: adminUser.id,
       cognitoSub: 'c6c242c4-9001-7019-668e-6fc02571d423',
-      statusId: 1,
+      status: 1,
     },
   });
 

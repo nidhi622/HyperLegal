@@ -6,7 +6,7 @@ import { ConfigService } from '@nestjs/config';
 export class SesService {
   private client: SESClient;
 
-  constructor(private config: ConfigService,) {
+  constructor(private config: ConfigService) {
     const accessKeyId =
       this.config.get<string>('AWS_IAM_USER_ACCESS_KEY_ID') ??
       this.config.getOrThrow<string>('AWS_IAM_USER_ACCESS_ID');
@@ -26,11 +26,9 @@ export class SesService {
     });
   }
 
-
   async sendResetPasswordEmail(email: string, resetLink: string) {
-
-    console.log("email::", email)
-    email="nidhi@weassemble.team"
+    console.log('email::', email);
+    email = 'nidhi@weassemble.team';
     const command = new SendEmailCommand({
       Source: 'nidhi@weassemble.team',
       Destination: {
@@ -43,6 +41,29 @@ export class SesService {
         Body: {
           Text: {
             Data: `Click here to reset password: ${resetLink}`,
+          },
+        },
+      },
+    });
+
+    return this.client.send(command);
+  }
+
+  async sendOrganisationInvite(email: string, password: string) {
+    console.log('email::', email);
+    email = 'nidhi@weassemble.team';
+    const command = new SendEmailCommand({
+      Source: 'nidhi@weassemble.team',
+      Destination: {
+        ToAddresses: [email],
+      },
+      Message: {
+        Subject: {
+          Data: 'Reset Password',
+        },
+        Body: {
+          Text: {
+            Data: ` password: ${password}`,
           },
         },
       },

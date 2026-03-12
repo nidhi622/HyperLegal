@@ -11,31 +11,30 @@ datasource db {
   provider = "postgresql"
 }
 
-
 // -----------------------------------------------------------------------------
 // CORE & LOOKUP TABLES
 // -----------------------------------------------------------------------------
 
-model Entity {
-  id      Int            @id // No Auto-increment as per JIRA
-  key     String         @db.VarChar(100)
-  name    String         @db.VarChar(100)
-  options EntityOption[]
+// model Entity {
+//   id      Int            @id // No Auto-increment as per JIRA
+//   key     String         @db.VarChar(100)
+//   name    String         @db.VarChar(100)
+//   options EntityOption[]
 
-  @@map("entities")
-}
+//   @@map("entities")
+// }
 
-model EntityOption {
-  id       Int    @id // No Auto-increment
-  entityId Int    @map("entity_id")
-  name     String @db.VarChar(100)
+// model EntityOption {
+//   id       Int    @id // No Auto-increment
+//   entityId Int    @map("entity_id")
+//   name     String @db.VarChar(100)
 
-  entity            Entity             @relation(fields: [entityId], references: [id])
-  platformUsers     PlatformUser[]     @relation("UserStatus")
-  organisationUsers OrganisationUser[] @relation("OrgUserStatus")
+//   entity            Entity             @relation(fields: [entityId], references: [id])
+//   platformUsers     PlatformUser[]     @relation("UserStatus")
+//   organisationUsers OrganisationUser[] @relation("OrgUserStatus")
 
-  @@map("entity_options")
-}
+//   @@map("entity_options")
+// }
 
 model User {
   id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
@@ -57,7 +56,8 @@ model User {
 
   // Relations
   platformUser          PlatformUser?
-  organisationUsers     OrganisationUser[]
+  // why this as array
+  organisationUsers     OrganisationUser?
   platformUserRoles     PlatformUserRole[]
   organisationUserRoles OrganisationUserRole[] @relation("OrgUserRoleOwner")
 
@@ -70,17 +70,17 @@ model User {
   createdPlatformRP          PlatformRolePermission[] @relation("PlatformRPCreator")
 
   // Organisation RBAC Audit Relations
-  createdOrganisations   Organisation[]           @relation("OrgCreator")
-  updatedOrganisations   Organisation[]           @relation("OrgUpdater")
-  createdOrgRoles        OrganisationRole[]       @relation("OrgRoleCreator")
-  updatedOrgRoles        OrganisationRole[]       @relation("OrgRoleUpdater")
-  createdOrgPermissions  OrganisationPermission[] @relation("OrgPermCreator")
-  updatedOrgPermissions  OrganisationPermission[] @relation("OrgPermUpdater")
-  createdOrgUserRoles    OrganisationUserRole[]   @relation("OrgUserRoleCreator")
-  createdOrgRP           OrganisationRolePermission[] @relation("OrgRPCreator")
-  
-  platformAuditLogs      PlatformAuditLog[]
-  organisationAuditLogs  OrganisationAuditLog[]
+  createdOrganisations  Organisation[]               @relation("OrgCreator")
+  updatedOrganisations  Organisation[]               @relation("OrgUpdater")
+  createdOrgRoles       OrganisationRole[]           @relation("OrgRoleCreator")
+  updatedOrgRoles       OrganisationRole[]           @relation("OrgRoleUpdater")
+  createdOrgPermissions OrganisationPermission[]     @relation("OrgPermCreator")
+  updatedOrgPermissions OrganisationPermission[]     @relation("OrgPermUpdater")
+  createdOrgUserRoles   OrganisationUserRole[]       @relation("OrgUserRoleCreator")
+  createdOrgRP          OrganisationRolePermission[] @relation("OrgRPCreator")
+
+  platformAuditLogs     PlatformAuditLog[]
+  organisationAuditLogs OrganisationAuditLog[]
 
   @@map("users")
 }
@@ -92,14 +92,14 @@ model User {
 model PlatformUser {
   id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId      String    @unique @map("user_id") @db.Uuid
-  statusId    Int       @map("status_id")
+  status      Int       @map("status")@default(1)
   cognitoSub  String    @unique @map("cognito_sub") @db.Uuid
   lastLoginAt DateTime? @map("last_login_at")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @default(now()) @map("updated_at")
 
-  user   User         @relation(fields: [userId], references: [id])
-  status EntityOption @relation("UserStatus", fields: [statusId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  // status EntityOption @relation("UserStatus", fields: [statusId], references: [id])
 
   @@map("platform_users")
 }
@@ -170,15 +170,15 @@ model PlatformUserRole {
 // -----------------------------------------------------------------------------
 
 model Organisation {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   referenceNumber String   @unique @map("reference_number") @db.VarChar(50)
-  name      String   @db.VarChar(100)
-  email     String   @unique @db.VarChar(255)
-  status    Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  createdBy String?  @map("created_by") @db.Uuid
-  updatedBy String?  @map("updated_by") @db.Uuid
+  name            String   @db.VarChar(100)
+  email           String   @unique @db.VarChar(255)
+  status          Int  @default(1)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  createdBy       String?  @map("created_by") @db.Uuid
+  updatedBy       String?  @map("updated_by") @db.Uuid
 
   creator User? @relation("OrgCreator", fields: [createdBy], references: [id])
   updater User? @relation("OrgUpdater", fields: [updatedBy], references: [id])
@@ -194,13 +194,13 @@ model Organisation {
 model OrganisationUser {
   id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId      String    @unique @map("user_id") @db.Uuid
-  statusId    Int       @map("status_id")
+  status      Int       @map("status")@default(2)
   cognitoSub  String    @unique @map("cognito_sub") @db.Uuid
   lastLoginAt DateTime? @map("last_login_at")
   createdAt   DateTime  @default(now()) @map("created_at")
 
-  user   User         @relation(fields: [userId], references: [id])
-  status EntityOption @relation("OrgUserStatus", fields: [statusId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  // status EntityOption @relation("OrgUserStatus", fields: [statusId], references: [id])
 
   @@map("organisation_users")
 }
@@ -272,7 +272,7 @@ model OrganisationUserRole {
 }
 
 model OrganisationAuditLog {
-  id                   Int     @id @default(autoincrement())
+  id             Int      @id @default(autoincrement())
   organisationId String?  @map("organisation_id") @db.Uuid
   userId         String   @map("user_id") @db.Uuid
   action         String   @db.VarChar(255)
@@ -294,5 +294,5 @@ model PlatformAuditLog {
 
   user User @relation(fields: [userId], references: [id])
 
-  @@map("platfrom_audit_logs") 
+  @@map("platfrom_audit_logs")
 }

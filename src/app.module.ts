@@ -5,8 +5,8 @@ import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
 import { CognitoModule } from './cognito/cognito.module';
 import { DatabaseModule } from './database';
-import { OrganisationModule } from './organisation/organisation.module';
-import { UsersModule } from './users/users.module';
+import { OrganisationModule } from './platform/organisation/organisation.module';
+import { UsersModule } from './platform/users/users.module';
 import { DynamoDBModule } from './dynamoDB/dynamoDB.module';
 import { AwsModule } from './aws/aws.module';
 

@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsEmail, IsNotEmpty, IsString, MaxLength, IsBoolean } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MaxLength, IsBoolean, IsIn } from 'class-validator';
 
 export class UpdateOrganisationDto {
   @ApiProperty({ example: 'Updated Law Firm Name' })
@@ -14,7 +14,9 @@ export class UpdateOrganisationDto {
   @MaxLength(255)
   email: string;
 
-  @ApiProperty({ example: true })
-  @IsBoolean()
-  status: boolean;
+  @ApiProperty({ example: 'ACTIVE' })
+    @IsString()
+    @IsNotEmpty()
+    @IsIn(['INVITED', 'ACTIVE', 'DISABLED'])
+    status: 'INVITED' | 'ACTIVE' | 'DISABLED';
 }

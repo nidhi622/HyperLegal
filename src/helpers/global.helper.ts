@@ -1,5 +1,6 @@
 import { config as configConstant } from 'src/configs/config';
 import env from './env.helper';
+import { UserStatus } from 'src/constant';
 
 
 
@@ -43,3 +44,11 @@ export function isProd(): boolean {
     return env('APP_ENV') === 'production';
 }
 
+
+export function getStatusId(status: string): UserStatus {
+  return UserStatus[status as keyof typeof UserStatus];
+}
+
+export function getStatusText(statusId: number): string {
+  return UserStatus[statusId as UserStatus];
+}

@@ -10,14 +10,17 @@ import {
   ForgotPasswordCommand,
   InitiateAuthCommand,
   SignUpCommand,
+  AdminGetUserCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
 import { createHmac } from 'crypto';
+import { GetOrganisationUserParamsDto } from './dto/get-organisation-user-params.dto';
 // import { UserRole } from 'generated/prisma/enums';
 
 export type CognitoCreateUserPayload = {
   email: string;
   firstName: string;
   lastName?: string | null;
+  password: string;
   // role: UserRole;
   sendInvite?: boolean;
 };
@@ -58,6 +61,20 @@ export class CognitoService {
         USERNAME: email,
         PASSWORD: password,
         SECRET_HASH: this.calculateSecretHash(email),
+      },
+    });
+    return this.client.send(command);
+  }
+
+  async loginOrganisationUser(email: string, password: string) {
+    const command = new AdminInitiateAuthCommand({
+      UserPoolId: this.config.get<string>('ORGANISATION_USER_POOL_ID'),
+      ClientId: this.config.get<string>('ORGANISATION_APP_CLIENT_ID'),
+      AuthFlow: 'ADMIN_USER_PASSWORD_AUTH',
+      AuthParameters: {
+        USERNAME: email,
+        PASSWORD: password,
+        SECRET_HASH: this.calculateOrganisationSecretHash(email),
       },
     });
     return this.client.send(command);
@@ -115,60 +132,132 @@ export class CognitoService {
     return this.client.send(command);
   }
 
-  async createUser(
+  async createOrganisationUser(
     payload: CognitoCreateUserPayload,
   ): Promise<{ userSub: string | null }> {
     const email = payload.email.toLowerCase();
-    const userPoolId = this.config.get<string>('PLATFORM_USER_POOL_ID');
-
+    const userPoolId = this.config.get<string>('ORGANISATION_USER_POOL_ID');
+    console.log('userPolId in creation: ', userPoolId);
     if (userPoolId) {
       const result = await this.client.send(
         new AdminCreateUserCommand({
           UserPoolId: userPoolId,
           Username: email,
-          TemporaryPassword:
-            this.config.get<string>('COGNITO_TEMP_PASSWORD') ??
-            'TempPassword#123',
+          TemporaryPassword: payload.password,
           DesiredDeliveryMediums: payload.sendInvite === false ? [] : ['EMAIL'],
           UserAttributes: [
             { Name: 'email', Value: email },
-            // { Name: 'email_verified', Value: 'true' },
             { Name: 'given_name', Value: payload.firstName },
             { Name: 'family_name', Value: payload.lastName ?? '' },
-            // { Name: 'custom:role', Value: payload.role },
           ],
         }),
       );
 
+      console.log("res:: in creation  ", JSON.stringify(result));
       const userSub =
         result.User?.Attributes?.find((attribute) => attribute.Name === 'sub')
           ?.Value ?? null;
       return { userSub };
-    }
-
-    const clientId = this.config.get<string>('PLATFORM_APP_CLIENT_ID');
-    if (!clientId) {
+    } else {
       return { userSub: null };
     }
 
-    const result = await this.client.send(
-      new SignUpCommand({
-        ClientId: clientId,
-        Username: email,
-        Password: this.generateTempPassword() ?? 'TempPassword#123',
-        SecretHash: this.calculateSecretHash(email),
-        UserAttributes: [
-          { Name: 'email', Value: email },
-          {
-            Name: 'name',
-            Value: `${payload.firstName} ${payload.lastName ?? ''}`.trim(),
-          },
-          // { Name: 'custom:role', Value: payload.role },
-        ],
-      }),
-    );
+    // const clientId = this.config.get<string>('PLATFORM_APP_CLIENT_ID');
+    // if (!clientId) {
+    //   return { userSub: null };
+    // }
 
-    return { userSub: result.UserSub ?? null };
+    // const result = await this.client.send(
+    //   new SignUpCommand({
+    //     ClientId: clientId,
+    //     Username: email,
+    //     Password: this.generateTempPassword() ?? 'TempPassword#123',
+    //     SecretHash: this.calculateSecretHash(email),
+    //     UserAttributes: [
+    //       { Name: 'email', Value: email },
+    //       {
+    //         Name: 'name',
+    //         Value: `${payload.firstName} ${payload.lastName ?? ''}`.trim(),
+    //       },
+    //       // { Name: 'custom:role', Value: payload.role },
+    //     ],
+    //   }),
+    // );
+
+    // return { userSub: result.UserSub ?? null };
+  }
+
+  async createPlatformUser(
+    payload: CognitoCreateUserPayload,
+  ): Promise<{ userSub: string | null }> {
+    const email = payload.email.toLowerCase();
+    const userPoolId = this.config.get<string>('PLATFORM_USER_POOL_ID');
+    console.log('userPolId in creation: ', userPoolId);
+    if (userPoolId) {
+
+      console.log("in if condition")
+      const result = await this.client.send(
+        new AdminCreateUserCommand({
+          UserPoolId: userPoolId,
+          Username: email,
+          TemporaryPassword: payload.password,
+          DesiredDeliveryMediums: payload.sendInvite === false ? [] : ['EMAIL'],
+          UserAttributes: [
+            { Name: 'email', Value: email },
+            { Name: 'given_name', Value: payload.firstName },
+            { Name: 'family_name', Value: payload.lastName ?? '' },
+          ],
+        }),
+      );
+
+      console.log("res:: in creation  ", result);
+      const userSub =
+        result.User?.Attributes?.find((attribute) => attribute.Name === 'sub')
+          ?.Value ?? null;
+      return { userSub };
+    } else {
+
+      console.log("in else ")
+      return { userSub: null };
+    }
+
+    // const clientId = this.config.get<string>('PLATFORM_APP_CLIENT_ID');
+    // if (!clientId) {
+    //   return { userSub: null };
+    // }
+
+    // const result = await this.client.send(
+    //   new SignUpCommand({
+    //     ClientId: clientId,
+    //     Username: email,
+    //     Password: this.generateTempPassword() ?? 'TempPassword#123',
+    //     SecretHash: this.calculateSecretHash(email),
+    //     UserAttributes: [
+    //       { Name: 'email', Value: email },
+    //       {
+    //         Name: 'name',
+    //         Value: `${payload.firstName} ${payload.lastName ?? ''}`.trim(),
+    //       },
+    //       // { Name: 'custom:role', Value: payload.role },
+    //     ],
+    //   }),
+    // );
+
+    // return { userSub: result.UserSub ?? null };
+  }
+
+  async getOrganisationUser(
+    params: GetOrganisationUserParamsDto,
+  ): Promise<any> {
+    const userPoolId = this.config.get<string>('ORGANISATION_USER_POOL_ID');
+    console.log('userPollId in get :: ', userPoolId);
+    const command = new AdminGetUserCommand({
+      UserPoolId: userPoolId,
+      Username: params.email,
+    });
+    const res = await this.client.send(command);
+
+    console.log('ress:: ', res);
   }
 
   async deleteUser(email: string): Promise<void> {
@@ -208,9 +297,37 @@ export class CognitoService {
     }
   }
 
+  async setOrganisationUserPassword(
+    email: string,
+    newPassword: string,
+  ): Promise<void> {
+    const userPoolId = this.config.get<string>('ORGANISATION_USER_POOL_ID');
+
+    if (!userPoolId) {
+      throw new Error('ORGANISATION_USER_POOL_ID is not configured');
+    }
+
+    await this.client.send(
+      new AdminSetUserPasswordCommand({
+        UserPoolId: userPoolId,
+        Username: email.toLowerCase(),
+        Password: newPassword,
+        Permanent: true,
+      }),
+    );
+  }
+
   private calculateSecretHash(username: string): string {
     const clientId = this.config.get('PLATFORM_APP_CLIENT_ID')!;
     const clientSecret = this.config.get('PLATFORM_APP_CLIENT_SECRET')!;
+    return createHmac('sha256', clientSecret)
+      .update(username + clientId)
+      .digest('base64');
+  }
+
+  private calculateOrganisationSecretHash(username: string): string {
+    const clientId = this.config.get('ORGANISATION_APP_CLIENT_ID')!;
+    const clientSecret = this.config.get('ORGANISATION_APP_CLIENT_SECRET')!;
     return createHmac('sha256', clientSecret)
       .update(username + clientId)
       .digest('base64');
